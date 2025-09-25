@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"sinibeli/internal/infrastructure/cache"
-	logger "sinibeli/internal/pkg/logging"
+	"belimang/internal/infrastructure/cache"
+	logger "belimang/internal/pkg/logging"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -62,7 +62,7 @@ func (s *UserService) Create(req *CreateUserRequest) (*UserResponse, error) {
 func (s *UserService) GetAll(limit, offset int) (*ListUsersResponse, error) {
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf("users:list:limit_%d:offset_%d", limit, offset)
-	
+
 	// Try to get from cache first
 	var cachedResponse ListUsersResponse
 	if s.cache != nil {
@@ -110,7 +110,7 @@ func (s *UserService) GetAll(limit, offset int) (*ListUsersResponse, error) {
 func (s *UserService) GetByID(id string) (*UserResponse, error) {
 	ctx := context.Background()
 	cacheKey := fmt.Sprintf(cache.UserProfileKey, id)
-	
+
 	// Try to get from cache first
 	var cachedResponse UserResponse
 	if s.cache != nil {
@@ -189,7 +189,7 @@ func (s *UserService) Update(id string, req *UpdateUserRequest) (*UserResponse, 
 		} else {
 			logger.DebugCtx(ctx, "User cache invalidated", "cache_key", cacheKey)
 		}
-		
+
 		// Also invalidate user list cache
 		// Note: In a real application, you might want to be more selective about this
 		// For now, we'll invalidate all user list caches

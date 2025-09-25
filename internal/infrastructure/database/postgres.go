@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"sinibeli/internal/config"
+	"belimang/internal/config"
 
 	_ "github.com/lib/pq"
 )

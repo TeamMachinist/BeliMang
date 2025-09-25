@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"sinibeli/internal/pkg/jwt"
+	"belimang/internal/pkg/jwt"
 
 	"github.com/gin-gonic/gin"
 )

@@ -1,13 +1,13 @@
 package cache
 
 import (
+	logger "belimang/internal/pkg/logging"
 	"context"
 	"encoding/json"
 	"fmt"
-	logger "sinibeli/internal/pkg/logging"
 	"time"
 
-	"sinibeli/internal/config"
+	"belimang/internal/config"
 
 	"github.com/redis/go-redis/v9"
 )

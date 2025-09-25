@@ -5,11 +5,11 @@ import (
 	"log"
 	"net/http"
 
-	"sinibeli/internal/app/user"
-	"sinibeli/internal/config"
-	"sinibeli/internal/infrastructure/cache"
-	"sinibeli/internal/infrastructure/database"
-	logger "sinibeli/internal/pkg/logging"
+	"belimang/internal/app/user"
+	"belimang/internal/config"
+	"belimang/internal/infrastructure/cache"
+	"belimang/internal/infrastructure/database"
+	logger "belimang/internal/pkg/logging"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
