@@ -59,10 +59,13 @@ func main() {
 	user.UserRoutes(v1, userHandler)
 
 	// Start HTTP server
-	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
-	log.Printf("Starting server on %s", addr)
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
+		Handler: router,
+	}
 
-	if err := http.ListenAndServe(addr, router); err != nil {
+	log.Printf("Server starting on port %d", cfg.Server.Port)
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
