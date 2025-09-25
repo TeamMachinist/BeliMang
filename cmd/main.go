@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"belimang/internal/config"
 	"belimang/internal/infrastructure/cache"
 	"belimang/internal/infrastructure/database"
+	"belimang/internal/pkg/jwt"
 	logger "belimang/internal/pkg/logging"
 
 	"github.com/gin-gonic/gin"
@@ -16,6 +18,8 @@ import (
 )
 
 func main() {
+	ctx := context.Background()
+
 	// Load configuration
 	cfg, err := config.LoadConfig(".env")
 	if err != nil {
@@ -26,7 +30,7 @@ func main() {
 	logger.Init()
 
 	// Initialize database
-	db, err := database.NewDB(&cfg.Database)
+	db, err := database.NewDatabase(ctx, &cfg.Database)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -37,7 +41,7 @@ func main() {
 	defer redisCache.Close()
 
 	// Initialize shared services using configuration
-	// jwtService := jwt.NewJWTService(cfg.JWT.SecretKey, cfg.JWT.Issuer)
+	jwtService := jwt.NewJWTService(cfg.JWT.SecretKey, cfg.JWT.Issuer)
 	// passwordService := utils.NewPasswordService()
 	validator := validator.New()
 
@@ -49,14 +53,13 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// Create API v1 group
-	v1 := router.Group("/api/v1")
+	// Create API group
+	root := router.Group("/")
 
 	// Initialize user components with shared dependencies
-	userRepo := user.NewUserRepository(db.DB)
-	userService := user.NewUserService(userRepo, redisCache)
+	userService := user.NewUserService(db.Queries, jwtService, redisCache)
 	userHandler := user.NewUserHandler(userService, validator)
-	user.UserRoutes(v1, userHandler)
+	user.UserRoutes(root, userHandler)
 
 	// Start HTTP server
 	srv := &http.Server{

@@ -1,0 +1,23 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "./internal/infrastructure/database/queries"
+    schema: "./migrations"
+    gen:
+      go:
+        package: "database"
+        out: "./internal/infrastructure/database"
+        sql_package: "pgx/v5"
+        emit_json_tags: true # Add `json:"column_name"` tags to structs
+        emit_prepared_queries: false # Don't generate prepared statements (better performance)
+        emit_exact_table_names: true # Use exact table names for structs (products -> Products)
+        emit_empty_slices: true # Return empty slices instead of nil for zero results
+        emit_interface: true # Generate Querier interface for mocking/testing
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "pg_catalog.timestamptz"
+            go_type: "time.Time"
+          - db_type: "pg_catalog.varchar"
+            go_type: "string"
+            nullable: true
