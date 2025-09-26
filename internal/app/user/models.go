@@ -3,8 +3,13 @@ package user
 import (
 	"errors"
 	"time"
+)
 
-	"github.com/google/uuid"
+type UserRole string
+
+const (
+	UserRoleUser  UserRole = "user"
+	UserRoleAdmin UserRole = "admin"
 )
 
 // User represents the user entity in the domain
@@ -13,7 +18,7 @@ type User struct {
 	Username  string    `json:"username" db:"username"`
 	Password  string    `json:"-" db:"password"`
 	Email     string    `json:"email" db:"email"`
-	Role      string    `json:"role" db:"role"`
+	Role      UserRole  `json:"role" db:"role"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
@@ -24,35 +29,16 @@ type RegisterRequest struct {
 	Email    string `json:"email" validate:"required,email"`
 }
 
+// LoginRequest represents the request payload for user login
 type LoginRequest struct {
 	Username string `json:"username" validate:"required,min=5,max=30"`
 	Password string `json:"password" validate:"required,min=5,max=30"`
 }
 
-// AuthResponse
+// AuthResponse represents the response payload for auth operations
 type AuthResponse struct {
 	Token string `json:"token"`
 }
-
-// NewUser
-func NewUser(username, email, hashedPassword string) *User {
-	return &User{
-		ID:        uuid.New().String(),
-		Username:  username,
-		Password:  hashedPassword,
-		Email:     email,
-		Role:      "user",
-		CreatedAt: time.Now(),
-	}
-}
-
-// Domain errors for user operations
-var (
-	ErrUserNotFound       = errors.New("user not found")
-	ErrUsernameExists     = errors.New("username already exists")
-	ErrEmailExists        = errors.New("email already exists")
-	ErrInvalidCredentials = errors.New("invalid credentials")
-)
 
 // ErrorResponse represents the structure for error responses
 type ErrorResponse struct {
@@ -75,7 +61,15 @@ type ValidationErrorResponse struct {
 	Errors  []ValidationError `json:"errors"`
 }
 
-// NewErrorResponse creates a new error response
+// Domain errors
+var (
+	ErrUserNotFound       = errors.New("user not found")
+	ErrUsernameExists     = errors.New("username already exists")
+	ErrEmailExists        = errors.New("email already exists")
+	ErrInvalidCredentials = errors.New("invalid credentials")
+)
+
+// Response constructors
 func NewErrorResponse(err string, message string) *ErrorResponse {
 	return &ErrorResponse{
 		Error:   err,
@@ -83,7 +77,6 @@ func NewErrorResponse(err string, message string) *ErrorResponse {
 	}
 }
 
-// NewErrorResponseWithDetails creates a new error response with details
 func NewErrorResponseWithDetails(err string, message string, details map[string]string) *ErrorResponse {
 	return &ErrorResponse{
 		Error:   err,
@@ -92,7 +85,6 @@ func NewErrorResponseWithDetails(err string, message string, details map[string]
 	}
 }
 
-// NewValidationErrorResponse creates a new validation error response
 func NewValidationErrorResponse(message string, errors []ValidationError) *ValidationErrorResponse {
 	return &ValidationErrorResponse{
 		Error:   "validation_error",
