@@ -54,6 +54,18 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 	return string(ns.UserRole), nil
 }
 
+type Merchants struct {
+	ID               uuid.UUID          `json:"id"`
+	AdminID          uuid.UUID          `json:"admin_id"`
+	Name             string             `json:"name"`
+	MerchantCategory string             `json:"merchant_category"`
+	ImageUrl         string             `json:"image_url"`
+	Lat              float64            `json:"lat"`
+	Lng              float64            `json:"lng"`
+	Location         interface{}        `json:"location"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
 type Users struct {
 	ID           uuid.UUID          `json:"id"`
 	Username     string             `json:"username"`

@@ -1,0 +1,115 @@
+package merchant
+
+import (
+	"net/http"
+	"strings"
+	
+	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
+	logger "belimang/internal/pkg/logging"
+)
+
+type MerchantHandler struct {
+	service  *MerchantService
+	validate *validator.Validate
+}
+
+func NewMerchantHandler(service *MerchantService, validate *validator.Validate) *MerchantHandler {
+	validate.RegisterValidation("merchantCategory", MerchantCategoryValidator)
+	validate.RegisterValidation("urlSuffix", imageURLValidator)
+	
+	return &MerchantHandler{
+		service:  service,
+		validate: validate,
+	}
+}
+
+func (h *MerchantHandler) CreateMerchantHandler(c *gin.Context) {
+	// TODO: Verify Admin ID and Admin Role from middleware
+
+	var req PostMerchantRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, NewErrorResponse("validation error", err.Error()))
+		return
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		var validationErrors []ValidationError
+		for _, err := range err.(validator.ValidationErrors) {
+			validationErrors = append(validationErrors, ValidationError{
+				Field:   err.Field(),
+				Message: getValidationMessage(err),
+				Value:   getFieldValue(err),
+			})
+		}
+		resp := NewValidationErrorResponse("Validation failed", validationErrors)
+		c.JSON(http.StatusBadRequest, resp)
+		return
+	}
+
+	adminID, err := uuid.Parse("11111111-1111-1111-1111-111111111111")
+	if err != nil {
+		logger.ErrorCtx(c, "Failed to parse uuid", "error: ", err)
+		return
+	}
+
+	merchantID, err := h.service.CreateMerchantService(c, adminID, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, NewErrorResponse("internal error", err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusCreated, merchantID)
+}
+
+var validMerchantCategories = map[string]struct{}{
+	"SmallRestaurant":       {},
+	"MediumRestaurant":      {},
+	"LargeRestaurant":       {},
+	"MerchandiseRestaurant": {},
+	"BoothKiosk":            {},
+	"ConvenienceStore":      {},
+}
+
+func MerchantCategoryValidator(fl validator.FieldLevel) bool {
+	_, exists := validMerchantCategories[fl.Field().String()]
+	return exists
+}
+
+func imageURLValidator(fl validator.FieldLevel) bool {
+	url := fl.Field().String()
+	return strings.HasSuffix(url, ".jpg") || strings.HasSuffix(url, ".jpeg")
+}
+
+// getValidationMessage returns a human-readable validation message
+func getValidationMessage(err validator.FieldError) string {
+   switch err.Tag() {
+   case "required":
+	   return "This field is required"
+   case "url":
+	   return "Must be a valid URL"
+   case "urlSuffix":
+	   return "Image URL must end with .jpg or .jpeg"
+   case "min":
+	   return "Value is too short (minimum " + err.Param() + " characters)"
+   case "max":
+	   return "Value is too long (maximum " + err.Param() + " characters)"
+   case "latitude":
+	   return "Latitude must be between -90 and 90"
+   case "longitude":
+	   return "Longitude must be between -180 and 180"
+   default:
+	   return "Invalid value"
+   }
+}
+
+func getFieldValue(err validator.FieldError) string {
+	if err.Value() == nil {
+		return ""
+	}
+	if str, ok := err.Value().(string); ok {
+		return str
+	}
+	return ""
+}

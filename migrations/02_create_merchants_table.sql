@@ -4,7 +4,8 @@ CREATE EXTENSION IF NOT EXISTS postgis;
 -- Create merchants table
 CREATE TABLE merchants (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(30) NOT NULL CHECK (LENGTH(name) >= 2),
+    admin_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(30) NOT NULL CHECK (LENGTH(name) >= 2 AND LENGTH(name) <= 30),
     merchant_category TEXT NOT NULL CHECK (
         merchant_category IN (
             'SmallRestaurant', 'MediumRestaurant', 'LargeRestaurant',

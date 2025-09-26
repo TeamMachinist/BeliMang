@@ -1,38 +1,44 @@
+# docker-compose.yml
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgis/postgis:15-3.4-alpine
     container_name: belimang-postgres
+    env_file: .env
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./migrations:/docker-entrypoint-initdb.d
+      - ./seeds:/seeds:ro
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${DB_PORT}:5432"
     restart: unless-stopped
     networks:
       - belimang-network
-
   redis:
     image: redis:7-alpine
     container_name: belimang-redis
+    env_file:
+      - .env
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${CACHE_PORT}:6379"
     volumes:
       - redis_data:/data
     networks:
       - belimang-network
-  
+
   app:
     build:
       context: .
       dockerfile: Dockerfile.dev
     container_name: belimang-app
+    env_file:
+      - .env
     volumes:
       - .:/app:cached
-      - go_modules:/go/pkg/mod # Cache go modules, faster rebuild
+      - go_modules:/go/pkg/mod
     ports:
       - "${HTTP_PORT:-8080}:8080"
     environment:
@@ -50,7 +56,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  go_modules: # Cache go modules, faster rebuild
+  go_modules:
 
 networks:
   belimang-network:

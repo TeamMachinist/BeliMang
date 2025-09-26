@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"belimang/internal/app/user"
+	"belimang/internal/app/merchant"
 	"belimang/internal/config"
 	"belimang/internal/infrastructure/cache"
 	"belimang/internal/infrastructure/database"
@@ -60,6 +61,11 @@ func main() {
 	userService := user.NewUserService(db.Queries, jwtService, redisCache)
 	userHandler := user.NewUserHandler(userService, validator)
 	user.UserRoutes(root, userHandler)
+
+	// Initialize merchant components with shared dependencies
+	merchantService := merchant.NewMerchantService(redisCache, db.Queries)
+	merchantHandler := merchant.NewMerchantHandler(merchantService, validator)
+	merchant.MerchantRoutes(root, merchantHandler)
 
 	// Start HTTP server
 	srv := &http.Server{

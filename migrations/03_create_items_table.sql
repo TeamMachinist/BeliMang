@@ -1,0 +1,14 @@
+-- -- Create items table
+-- CREATE TABLE items (
+--     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--     merchant_id UUID REFERENCES merchants(id) ON DELETE CASCADE,
+--     name VARCHAR(30) NOT NULL CHECK (LENGTH(name) >= 2 AND LENGTH(name) <= 30),
+--     product_category TEXT NOT NULL CHECK (
+--         product_category IN (
+--             'Food', 'Snack', 'Condiments', 'Additions'
+--         )
+--     ),
+--     price INTEGER NOT NULL,
+--     image_url TEXT NOT NULL,
+--     created_at TIMESTAMPTZ DEFAULT NOW()
+-- );

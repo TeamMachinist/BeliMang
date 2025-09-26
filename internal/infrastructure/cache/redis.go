@@ -26,12 +26,14 @@ type CacheConfig struct {
 
 // Cache key constants for consistency
 const (
-	UserFileListKey = "user:files:%s"    // user:files:{userID}
-	FileMetadataKey = "file:metadata:%s" // file:metadata:{fileID}
-	FileExistsKey   = "file:exists:%s"   // file:exists:{fileID}
-	ProductListKey  = "products:list:%s" // products:list:{filters_hash}
-	ProductKey      = "product:%s"       // product:{productID}
-	UserProfileKey  = "user:profile:%s"  // user:profile:{userID}
+	UserFileListKey   = "user:files:%s"      // user:files:{userID}
+	FileMetadataKey   = "file:metadata:%s"   // file:metadata:{fileID}
+	FileExistsKey     = "file:exists:%s"     // file:exists:{fileID}
+	ProductListKey    = "products:list:%s"   // products:list:{filters_hash}
+	ProductKey        = "product:%s"         // product:{productID}
+	UserProfileKey    = "user:profile:%s"    // user:profile:{userID}
+	MerchantKey       = "merchant:%s"        // merchant:{merchantID}
+	MerchantExistsKey = "merchant:exists:%s" // merchant:exists:{merchantID}
 )
 
 // TTL constants for different data types
@@ -42,6 +44,7 @@ const (
 	ProductListTTL  = 10 * time.Minute // Product search results
 	ProductTTL      = 30 * time.Minute // Individual products
 	UserProfileTTL  = 15 * time.Minute // User profiles
+	MerchantTTL     = 30 * time.Minute // merchant:{merchantID}
 )
 
 func NewRedisCache(config config.CacheConfig) *RedisCache {
