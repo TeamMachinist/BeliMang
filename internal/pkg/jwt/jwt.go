@@ -15,9 +15,8 @@ type JWTService struct {
 
 // JWTClaims represents the claims in a JWT token
 type JWTClaims struct {
-	UserID   string `json:"user_id"`
-	Email    string `json:"email"`
-	Username string `json:"username"`
+	UserID string `json:"user_id"`
+	Role   string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -30,9 +29,10 @@ func NewJWTService(secretKey, issuer string) *JWTService {
 }
 
 // GenerateToken generates a new JWT token for a user
-func (j *JWTService) GenerateToken(userID, email, username string) (string, error) {
+func (j *JWTService) GenerateToken(userID, role string) (string, error) {
 	claims := JWTClaims{
 		UserID: userID,
+		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), // 24 hours
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
