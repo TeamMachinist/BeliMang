@@ -13,10 +13,14 @@ import (
 type Querier interface {
 	CheckEmailExistsForRole(ctx context.Context, arg CheckEmailExistsForRoleParams) (bool, error)
 	CheckUsernameExists(ctx context.Context, username string) (bool, error)
+	CountItemsByMerchant(ctx context.Context, arg CountItemsByMerchantParams) (int64, error)
+	CreateItem(ctx context.Context, arg CreateItemParams) (uuid.UUID, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (Users, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error)
 	GetUserByUsernameAndRole(ctx context.Context, arg GetUserByUsernameAndRoleParams) (Users, error)
 	GetUsersByRole(ctx context.Context, arg GetUsersByRoleParams) ([]GetUsersByRoleRow, error)
+	ListItemsByMerchant(ctx context.Context, arg ListItemsByMerchantParams) ([]Items, error)
+	MerchantExists(ctx context.Context, id uuid.UUID) (bool, error)
 	VerifyAdminByID(ctx context.Context, id uuid.UUID) (VerifyAdminByIDRow, error)
 	VerifyUserByID(ctx context.Context, id uuid.UUID) (VerifyUserByIDRow, error)
 }

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"belimang/internal/app/items"
 	"belimang/internal/app/user"
 	"belimang/internal/config"
 	"belimang/internal/infrastructure/cache"
@@ -58,6 +59,11 @@ func main() {
 	userService := user.NewUserService(db.Queries, jwtService, passwordService, redisCache)
 	userHandler := user.NewUserHandler(userService, validator)
 	user.RegisterRoutes(router, userHandler)
+
+	// Item
+	itemService := items.NewItemService(db.Queries)
+	itemHandler := items.NewItemHandler(itemService)
+	items.ItemRoutes(root, itemHandler)
 
 	// Start HTTP server
 	srv := &http.Server{
