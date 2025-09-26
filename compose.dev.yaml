@@ -11,6 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d
+      - ./seeds:/seeds:ro
     ports:
       - "${DB_PORT}:5432"
     restart: unless-stopped
