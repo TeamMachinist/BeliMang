@@ -12,51 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type ProductCategory string
-
-const (
-	ProductCategoryBeverage   ProductCategory = "Beverage"
-	ProductCategoryFood       ProductCategory = "Food"
-	ProductCategorySnack      ProductCategory = "Snack"
-	ProductCategoryCondiments ProductCategory = "Condiments"
-	ProductCategoryAdditions  ProductCategory = "Additions"
-)
-
-func (e *ProductCategory) Scan(src interface{}) error {
-	switch s := src.(type) {
-	case []byte:
-		*e = ProductCategory(s)
-	case string:
-		*e = ProductCategory(s)
-	default:
-		return fmt.Errorf("unsupported scan type for ProductCategory: %T", src)
-	}
-	return nil
-}
-
-type NullProductCategory struct {
-	ProductCategory ProductCategory `json:"product_category"`
-	Valid           bool            `json:"valid"` // Valid is true if ProductCategory is not NULL
-}
-
-// Scan implements the Scanner interface.
-func (ns *NullProductCategory) Scan(value interface{}) error {
-	if value == nil {
-		ns.ProductCategory, ns.Valid = "", false
-		return nil
-	}
-	ns.Valid = true
-	return ns.ProductCategory.Scan(value)
-}
-
-// Value implements the driver Valuer interface.
-func (ns NullProductCategory) Value() (driver.Value, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	return string(ns.ProductCategory), nil
-}
-
 type UserRole string
 
 const (
@@ -100,12 +55,13 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 }
 
 type Items struct {
-	ID              uuid.UUID       `json:"id"`
-	MerchantID      uuid.UUID       `json:"merchant_id"`
-	Name            string          `json:"name"`
-	ProductCategory ProductCategory `json:"product_category"`
-	Price           int64           `json:"price"`
-	CreatedAt       time.Time       `json:"created_at"`
+	ID              uuid.UUID `json:"id"`
+	MerchantID      uuid.UUID `json:"merchant_id"`
+	Name            string    `json:"name"`
+	ProductCategory string    `json:"product_category"`
+	Price           int64     `json:"price"`
+	ImageUrl        string    `json:"image_url"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 type Merchants struct {

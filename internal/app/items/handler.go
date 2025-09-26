@@ -3,6 +3,8 @@ package items
 import (
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -77,5 +79,96 @@ func (h *ItemHandler) CreateItem(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, gin.H{
 		"itemId": itemID.String(),
+	})
+}
+
+func (h *ItemHandler) GetItems(c *gin.Context) {
+	merchantIDStr := c.Param("merchantId")
+	merchantID, err := uuid.Parse(merchantIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid merchantId format"})
+		return
+	}
+
+	req := ListItemsRequest{
+		Limit:  5,
+		Offset: 0,
+	}
+
+	if itemIdStr := c.Query("itemId"); itemIdStr != "" {
+		itemID, err := uuid.Parse(itemIdStr)
+		if err != nil {
+			h.respondEmpty(c, 5, 0, 0)
+			return
+		}
+		req.ItemID = &itemID
+	}
+
+	// --- limit & offset ---
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.ParseInt(limitStr, 10, 32); err == nil && l > 0 {
+			req.Limit = int32(l)
+		}
+	}
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if o, err := strconv.ParseInt(offsetStr, 10, 32); err == nil && o >= 0 {
+			req.Offset = int32(o)
+		}
+	}
+
+	// --- name (optional string) ---
+	if name := c.Query("name"); name != "" {
+		req.Name = &name
+	}
+
+	// --- productCategory (optional enum) ---
+	if catStr := c.Query("productCategory"); catStr != "" {
+		allowed := map[string]bool{
+			"Beverage": true, "Food": true, "Snack": true,
+			"Condiments": true, "Additions": true,
+		}
+		if allowed[catStr] {
+			req.ProductCategory = &catStr
+		}
+
+	}
+
+	// --- createdAt (optional: asc/desc) ---
+	if order := c.Query("createdAt"); order != "" {
+		lower := strings.ToLower(order)
+		if lower == "asc" || lower == "desc" {
+			req.CreatedAtOrder = &order
+		}
+
+	}
+
+	data, total, err := h.itemService.ListItems(c.Request.Context(), merchantID, req)
+	if err != nil {
+		if errors.Is(err, ErrMerchantNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "merchant not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	resp := ListItemsResponse{
+		Data: data,
+	}
+	resp.Meta.Limit = req.Limit
+	resp.Meta.Offset = req.Offset
+	resp.Meta.Total = total
+
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *ItemHandler) respondEmpty(c *gin.Context, limit, offset int32, total int64) {
+	c.JSON(http.StatusOK, ListItemsResponse{
+		Data: []ItemResponse{},
+		Meta: struct {
+			Limit  int32 `json:"limit"`
+			Offset int32 `json:"offset"`
+			Total  int64 `json:"total"`
+		}{Limit: limit, Offset: offset, Total: 0},
 	})
 }

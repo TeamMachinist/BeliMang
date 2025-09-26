@@ -8,5 +8,6 @@ func ItemRoutes(router *gin.RouterGroup, handler *ItemHandler) {
 	items := router.Group("/merchant")
 	{
 		items.POST("/:merchantId/items", handler.CreateItem)
+		items.GET("/:merchantId/items", handler.GetItems)
 	}
 }
