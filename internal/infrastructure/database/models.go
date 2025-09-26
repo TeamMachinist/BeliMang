@@ -7,10 +7,55 @@ package database
 import (
 	"database/sql/driver"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type ProductCategory string
+
+const (
+	ProductCategoryBeverage   ProductCategory = "Beverage"
+	ProductCategoryFood       ProductCategory = "Food"
+	ProductCategorySnack      ProductCategory = "Snack"
+	ProductCategoryCondiments ProductCategory = "Condiments"
+	ProductCategoryAdditions  ProductCategory = "Additions"
+)
+
+func (e *ProductCategory) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ProductCategory(s)
+	case string:
+		*e = ProductCategory(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ProductCategory: %T", src)
+	}
+	return nil
+}
+
+type NullProductCategory struct {
+	ProductCategory ProductCategory `json:"product_category"`
+	Valid           bool            `json:"valid"` // Valid is true if ProductCategory is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullProductCategory) Scan(value interface{}) error {
+	if value == nil {
+		ns.ProductCategory, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ProductCategory.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullProductCategory) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ProductCategory), nil
+}
 
 type UserRole string
 
@@ -54,11 +99,32 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 	return string(ns.UserRole), nil
 }
 
+type Items struct {
+	ID              uuid.UUID       `json:"id"`
+	MerchantID      uuid.UUID       `json:"merchant_id"`
+	Name            string          `json:"name"`
+	ProductCategory ProductCategory `json:"product_category"`
+	Price           int64           `json:"price"`
+	CreatedAt       time.Time       `json:"created_at"`
+}
+
+type Merchants struct {
+	ID               uuid.UUID   `json:"id"`
+	AdminID          uuid.UUID   `json:"admin_id"`
+	Name             string      `json:"name"`
+	MerchantCategory string      `json:"merchant_category"`
+	ImageUrl         string      `json:"image_url"`
+	Lat              float64     `json:"lat"`
+	Lng              float64     `json:"lng"`
+	Location         interface{} `json:"location"`
+	CreatedAt        time.Time   `json:"created_at"`
+}
+
 type Users struct {
-	ID           uuid.UUID          `json:"id"`
-	Username     string             `json:"username"`
-	PasswordHash string             `json:"password_hash"`
-	Email        string             `json:"email"`
-	Role         UserRole           `json:"role"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID           uuid.UUID `json:"id"`
+	Username     string    `json:"username"`
+	PasswordHash string    `json:"password_hash"`
+	Email        string    `json:"email"`
+	Role         UserRole  `json:"role"`
+	CreatedAt    time.Time `json:"created_at"`
 }

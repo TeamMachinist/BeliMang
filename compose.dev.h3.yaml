@@ -1,7 +1,8 @@
-# docker-compose.yml
 services:
   postgres:
-    image: postgis/postgis:15-3.4-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres # ← file Dockerfile kustommu
     container_name: belimang-postgres
     env_file: .env
     environment:
@@ -16,6 +17,7 @@ services:
     restart: unless-stopped
     networks:
       - belimang-network
+
   redis:
     image: redis:7-alpine
     container_name: belimang-redis
@@ -53,8 +55,8 @@ services:
       - belimang-network
 
 volumes:
-  postgres_data: /var/lib/postgresql/data # ← extra space after colon!
-  redis_data: /data
+  postgres_data:
+  redis_data:
   go_modules:
 
 networks:
