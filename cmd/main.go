@@ -13,6 +13,7 @@ import (
 	"belimang/internal/infrastructure/database"
 	"belimang/internal/pkg/jwt"
 	logger "belimang/internal/pkg/logging"
+	"belimang/internal/pkg/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -43,24 +44,21 @@ func main() {
 
 	// Initialize shared services using configuration
 	jwtService := jwt.NewJWTService(cfg.JWT.SecretKey, cfg.JWT.Issuer)
-	// passwordService := utils.NewPasswordService()
+	passwordService := utils.NewPasswordService()
 	validator := validator.New()
 
 	// Initialize Gin router
 	router := gin.Default()
 
 	// Setup routes with shared dependencies
-	router.GET("/health", func(c *gin.Context) {
+	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// Create API group
-	root := router.Group("/")
-
 	// Initialize user components with shared dependencies
-	userService := user.NewUserService(db.Queries, jwtService, redisCache)
+	userService := user.NewUserService(db.Queries, jwtService, passwordService, redisCache)
 	userHandler := user.NewUserHandler(userService, validator)
-	user.UserRoutes(root, userHandler)
+	user.RegisterRoutes(router, userHandler)
 
 	// Item
 	itemService := items.NewItemService(db.Queries)
