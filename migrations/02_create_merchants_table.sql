@@ -16,7 +16,7 @@ CREATE TABLE merchants (
     lat FLOAT8 NOT NULL CHECK (lat BETWEEN -90 AND 90),
     lng FLOAT8 NOT NULL CHECK (lng BETWEEN -180 AND 180),
     location GEOGRAPHY(POINT, 4326) GENERATED ALWAYS AS (ST_Point(lng, lat)) STORED,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Create spatial index

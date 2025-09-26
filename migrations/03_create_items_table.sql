@@ -10,5 +10,5 @@
 --     ),
 --     price INTEGER NOT NULL,
 --     image_url TEXT NOT NULL,
---     created_at TIMESTAMPTZ DEFAULT NOW()
+--     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 -- );
