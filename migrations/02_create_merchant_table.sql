@@ -1,6 +1,5 @@
 -- Enable PostGIS (should already be enabled in this image, but safe to run)
 CREATE EXTENSION IF NOT EXISTS postgis;
-CREATE EXTENSION IF NOT EXISTS h3;
 
 -- Create merchants table
 CREATE TABLE merchants (
