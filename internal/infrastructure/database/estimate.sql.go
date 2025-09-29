@@ -13,25 +13,19 @@ import (
 
 const createEstimate = `-- name: CreateEstimate :one
 INSERT INTO estimates (
-    user_location,
-    orders,
-    total_price,
-    estimated_delivery_time_in_minutes
+    user_lat, user_lng, orders, total_price, estimated_delivery_time_in_minutes
 ) VALUES (
-    ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
-    $3,
-    $4,
-    $5
+    $1, $2, $3, $4, $5
 )
 RETURNING id, total_price, estimated_delivery_time_in_minutes
 `
 
 type CreateEstimateParams struct {
-	UserLng                        interface{} `json:"user_lng"`
-	UserLat                        interface{} `json:"user_lat"`
-	Orders                         []byte      `json:"orders"`
-	TotalPrice                     int64       `json:"total_price"`
-	EstimatedDeliveryTimeInMinutes int32       `json:"estimated_delivery_time_in_minutes"`
+	UserLat                        float64 `json:"user_lat"`
+	UserLng                        float64 `json:"user_lng"`
+	Orders                         []byte  `json:"orders"`
+	TotalPrice                     int64   `json:"total_price"`
+	EstimatedDeliveryTimeInMinutes int32   `json:"estimated_delivery_time_in_minutes"`
 }
 
 type CreateEstimateRow struct {
@@ -42,8 +36,8 @@ type CreateEstimateRow struct {
 
 func (q *Queries) CreateEstimate(ctx context.Context, arg CreateEstimateParams) (CreateEstimateRow, error) {
 	row := q.db.QueryRow(ctx, createEstimate,
-		arg.UserLng,
 		arg.UserLat,
+		arg.UserLng,
 		arg.Orders,
 		arg.TotalPrice,
 		arg.EstimatedDeliveryTimeInMinutes,
@@ -54,7 +48,9 @@ func (q *Queries) CreateEstimate(ctx context.Context, arg CreateEstimateParams) 
 }
 
 const getItemPrice = `-- name: GetItemPrice :one
-SELECT price FROM items WHERE id = $1 AND merchant_id = $2
+SELECT price
+FROM items
+WHERE id = $1::uuid AND merchant_id = $2::uuid
 `
 
 type GetItemPriceParams struct {
@@ -70,7 +66,9 @@ func (q *Queries) GetItemPrice(ctx context.Context, arg GetItemPriceParams) (int
 }
 
 const getMerchantLatLong = `-- name: GetMerchantLatLong :one
-SELECT id, lat, lng FROM merchants WHERE id = $1
+SELECT id, lat, lng
+FROM merchants
+WHERE id = $1::uuid
 `
 
 type GetMerchantLatLongRow struct {
@@ -84,38 +82,4 @@ func (q *Queries) GetMerchantLatLong(ctx context.Context, merchantID uuid.UUID) 
 	var i GetMerchantLatLongRow
 	err := row.Scan(&i.ID, &i.Lat, &i.Lng)
 	return i, err
-}
-
-const validateMerchantsWithin3km = `-- name: ValidateMerchantsWithin3km :many
-SELECT id
-FROM merchants
-WHERE id = ANY($1::uuid[])
-  AND ST_Distance(location, ST_Point($2, $3)::geography) > 3000
-`
-
-type ValidateMerchantsWithin3kmParams struct {
-	MerchantIds []uuid.UUID `json:"merchant_ids"`
-	UserLng     interface{} `json:"user_lng"`
-	UserLat     interface{} `json:"user_lat"`
-}
-
-// Gunakan PostGIS ST_Distance (akurat, berbasis elipsoid)
-func (q *Queries) ValidateMerchantsWithin3km(ctx context.Context, arg ValidateMerchantsWithin3kmParams) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, validateMerchantsWithin3km, arg.MerchantIds, arg.UserLng, arg.UserLat)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []uuid.UUID{}
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }

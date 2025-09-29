@@ -26,3 +26,10 @@ type EstimateResponse struct {
 	EstimatedDeliveryTimeInMinutes int    `json:"estimatedDeliveryTimeInMinutes"`
 	CalculatedEstimateId           string `json:"calculatedEstimateId"`
 }
+
+type MerchantPoint struct {
+	MerchantID string
+	Lat, Lng   float64
+	IsStart    bool
+	Order      Order
+}

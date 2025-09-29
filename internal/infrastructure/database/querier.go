@@ -24,8 +24,6 @@ type Querier interface {
 	GetUsersByRole(ctx context.Context, arg GetUsersByRoleParams) ([]GetUsersByRoleRow, error)
 	ListItemsByMerchant(ctx context.Context, arg ListItemsByMerchantParams) ([]Items, error)
 	MerchantExists(ctx context.Context, id uuid.UUID) (bool, error)
-	// Gunakan PostGIS ST_Distance (akurat, berbasis elipsoid)
-	ValidateMerchantsWithin3km(ctx context.Context, arg ValidateMerchantsWithin3kmParams) ([]uuid.UUID, error)
 	VerifyAdminByID(ctx context.Context, id uuid.UUID) (VerifyAdminByIDRow, error)
 	VerifyUserByID(ctx context.Context, id uuid.UUID) (VerifyUserByIDRow, error)
 }

@@ -55,12 +55,13 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 }
 
 type Estimates struct {
-	ID                             uuid.UUID   `json:"id"`
-	UserLocation                   interface{} `json:"user_location"`
-	Orders                         []byte      `json:"orders"`
-	TotalPrice                     int64       `json:"total_price"`
-	EstimatedDeliveryTimeInMinutes int32       `json:"estimated_delivery_time_in_minutes"`
-	CreatedAt                      time.Time   `json:"created_at"`
+	ID                             uuid.UUID `json:"id"`
+	UserLat                        float64   `json:"user_lat"`
+	UserLng                        float64   `json:"user_lng"`
+	Orders                         []byte    `json:"orders"`
+	TotalPrice                     int64     `json:"total_price"`
+	EstimatedDeliveryTimeInMinutes int32     `json:"estimated_delivery_time_in_minutes"`
+	CreatedAt                      time.Time `json:"created_at"`
 }
 
 type Items struct {
