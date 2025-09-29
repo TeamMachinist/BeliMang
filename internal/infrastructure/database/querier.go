@@ -15,8 +15,11 @@ type Querier interface {
 	CheckUsernameExists(ctx context.Context, username string) (bool, error)
 	CountItemsByMerchant(ctx context.Context, arg CountItemsByMerchantParams) (int64, error)
 	CreateEstimate(ctx context.Context, arg CreateEstimateParams) (CreateEstimateRow, error)
+	CreateEstimateOrder(ctx context.Context, arg CreateEstimateOrderParams) error
+	CreateEstimateOrderItem(ctx context.Context, arg CreateEstimateOrderItemParams) error
 	CreateItem(ctx context.Context, arg CreateItemParams) (uuid.UUID, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (Users, error)
+	GetEstimateOrderIds(ctx context.Context, estimateID uuid.UUID) ([]GetEstimateOrderIdsRow, error)
 	GetItemPrice(ctx context.Context, arg GetItemPriceParams) (int64, error)
 	GetMerchantLatLong(ctx context.Context, merchantID uuid.UUID) (GetMerchantLatLongRow, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error)

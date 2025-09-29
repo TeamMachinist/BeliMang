@@ -54,11 +54,26 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 	return string(ns.UserRole), nil
 }
 
+type EstimateOrderItems struct {
+	ID              uuid.UUID `json:"id"`
+	EstimateOrderID uuid.UUID `json:"estimate_order_id"`
+	ItemID          uuid.UUID `json:"item_id"`
+	Quantity        int32     `json:"quantity"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type EstimateOrders struct {
+	ID              uuid.UUID `json:"id"`
+	EstimateID      uuid.UUID `json:"estimate_id"`
+	MerchantID      uuid.UUID `json:"merchant_id"`
+	IsStartingPoint bool      `json:"is_starting_point"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
 type Estimates struct {
 	ID                             uuid.UUID `json:"id"`
 	UserLat                        float64   `json:"user_lat"`
 	UserLng                        float64   `json:"user_lng"`
-	Orders                         []byte    `json:"orders"`
 	TotalPrice                     int64     `json:"total_price"`
 	EstimatedDeliveryTimeInMinutes int32     `json:"estimated_delivery_time_in_minutes"`
 	CreatedAt                      time.Time `json:"created_at"`
