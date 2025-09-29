@@ -1,4 +1,3 @@
-// internal/service/item_service.go
 package items
 
 import (

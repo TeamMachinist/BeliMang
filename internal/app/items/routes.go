@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func ItemRoutes(router *gin.RouterGroup, handler *ItemHandler) {
+func ItemRoutes(router *gin.Engine, handler *ItemHandler) {
 	items := router.Group("/merchant")
 	{
 		items.POST("/:merchantId/items", handler.CreateItem)
