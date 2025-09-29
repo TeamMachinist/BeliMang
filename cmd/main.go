@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"belimang/internal/app/image"
 	"belimang/internal/app/items"
 	"belimang/internal/app/user"
 	"belimang/internal/config"
@@ -56,14 +57,18 @@ func main() {
 	})
 
 	// Initialize user components with shared dependencies
-	userService := user.NewUserService(db.Queries, jwtService, passwordService, redisCache)
+	userService := user.NewUserService(db.Queries, redisCache, jwtService, passwordService)
 	userHandler := user.NewUserHandler(userService, validator)
 	user.RegisterRoutes(router, userHandler)
 
 	// Item
 	itemService := items.NewItemService(db.Queries)
 	itemHandler := items.NewItemHandler(itemService)
-	items.ItemRoutes(root, itemHandler)
+	items.ItemRoutes(router.Group("/api/v1"), itemHandler)
+
+	// Image
+	imageHandler := image.NewImageHandler()
+	image.RegisterRoutes(router, imageHandler)
 
 	// Start HTTP server
 	srv := &http.Server{

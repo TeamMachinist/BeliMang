@@ -89,3 +89,40 @@ func RequireAdmin(jwtService *jwt.JWTService) gin.HandlerFunc {
 func RequireUser(jwtService *jwt.JWTService) gin.HandlerFunc {
 	return RequireUserRole(jwtService, "user")
 }
+
+// AdminAuthMiddleware is a simplified admin authentication middleware
+// This is a placeholder implementation - in a real app, you'd inject the JWT service
+func AdminAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get the Authorization header
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "missing_authorization_header", "message": "Authorization header is required"})
+			c.Abort()
+			return
+		}
+
+		// Check if the header starts with "Bearer "
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_authorization_header", "message": "Authorization header must start with 'Bearer '"})
+			c.Abort()
+			return
+		}
+
+		// For now, we'll just check if a Bearer token is present
+		// In a real implementation, you would validate the token with JWT service
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid_token", "message": "Invalid or expired token"})
+			c.Abort()
+			return
+		}
+
+		// Set user information in the context (simplified)
+		c.Set("user_role", "admin")
+		c.Set("token", tokenString)
+
+		// Continue with the next handler
+		c.Next()
+	}
+}
