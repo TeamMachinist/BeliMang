@@ -67,7 +67,7 @@ func main() {
 	items.ItemRoutes(router, itemHandler)
 
 	// Purchase
-	purhcaseService := purchase.NewPurchaseService(db.Queries)
+	purhcaseService := purchase.NewPurchaseService(db.Queries, db)
 	purchaseHandler := purchase.NewPurchaseHandler(purhcaseService)
 	purchase.PurchaseRoutes(router, purchaseHandler)
 

@@ -4,7 +4,6 @@ import (
 	"belimang/internal/infrastructure/database"
 	"belimang/internal/pkg/utils"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -16,10 +15,14 @@ var ErrNeedExactValidation = errors.New("ambiguous distance: need exact validati
 
 type PurchaseService struct {
 	queries *database.Queries
+	db      *database.DB
 }
 
-func NewPurchaseService(q *database.Queries) *PurchaseService {
-	return &PurchaseService{queries: q}
+func NewPurchaseService(q *database.Queries, db *database.DB) *PurchaseService {
+	return &PurchaseService{
+		queries: q,
+		db:      db,
+	}
 }
 
 // validateWithH3PreFilter returns:
@@ -207,15 +210,14 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 	// === Estimasi waktu ===
 	timeMinutes := utils.EstimateTimeMinutes(totalDist)
 
-	// === Simpan estimate ===
-	orderJson, _ := json.Marshal(req.Orders)
-	estimate, err := s.queries.CreateEstimate(ctx, database.CreateEstimateParams{
-		UserLat:                        req.UserLocation.Lat,
-		UserLng:                        req.UserLocation.Long,
-		Orders:                         orderJson,
-		TotalPrice:                     totalPrice,
-		EstimatedDeliveryTimeInMinutes: int32(timeMinutes),
-	})
+	// === Simpan estimate dengan repository ===
+	repository := NewPurchaseRepository(s.db)
+	estimate, err := repository.CreateEstimateWithOrders(ctx, 
+		req.UserLocation.Lat, 
+		req.UserLocation.Long, 
+		float64(totalPrice), 
+		int32(timeMinutes), 
+		req.Orders)
 	if err != nil {
 		return EstimateResponse{}, fmt.Errorf("failed to save estimate: %w", err)
 	}

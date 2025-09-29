@@ -13,9 +13,9 @@ import (
 
 const createEstimate = `-- name: CreateEstimate :one
 INSERT INTO estimates (
-    user_lat, user_lng, orders, total_price, estimated_delivery_time_in_minutes
+    user_lat, user_lng, total_price, estimated_delivery_time_in_minutes
 ) VALUES (
-    $1, $2, $3, $4, $5
+    $1, $2, $3, $4
 )
 RETURNING id, total_price, estimated_delivery_time_in_minutes
 `
@@ -23,7 +23,6 @@ RETURNING id, total_price, estimated_delivery_time_in_minutes
 type CreateEstimateParams struct {
 	UserLat                        float64 `json:"user_lat"`
 	UserLng                        float64 `json:"user_lng"`
-	Orders                         []byte  `json:"orders"`
 	TotalPrice                     int64   `json:"total_price"`
 	EstimatedDeliveryTimeInMinutes int32   `json:"estimated_delivery_time_in_minutes"`
 }
@@ -38,13 +37,82 @@ func (q *Queries) CreateEstimate(ctx context.Context, arg CreateEstimateParams) 
 	row := q.db.QueryRow(ctx, createEstimate,
 		arg.UserLat,
 		arg.UserLng,
-		arg.Orders,
 		arg.TotalPrice,
 		arg.EstimatedDeliveryTimeInMinutes,
 	)
 	var i CreateEstimateRow
 	err := row.Scan(&i.ID, &i.TotalPrice, &i.EstimatedDeliveryTimeInMinutes)
 	return i, err
+}
+
+const createEstimateOrder = `-- name: CreateEstimateOrder :exec
+INSERT INTO estimate_orders (
+    estimate_id, merchant_id, is_starting_point
+) VALUES (
+    $1, $2, $3
+)
+`
+
+type CreateEstimateOrderParams struct {
+	EstimateID      uuid.UUID `json:"estimate_id"`
+	MerchantID      uuid.UUID `json:"merchant_id"`
+	IsStartingPoint bool      `json:"is_starting_point"`
+}
+
+func (q *Queries) CreateEstimateOrder(ctx context.Context, arg CreateEstimateOrderParams) error {
+	_, err := q.db.Exec(ctx, createEstimateOrder, arg.EstimateID, arg.MerchantID, arg.IsStartingPoint)
+	return err
+}
+
+const createEstimateOrderItem = `-- name: CreateEstimateOrderItem :exec
+INSERT INTO estimate_order_items (
+    estimate_order_id, item_id, quantity
+) VALUES (
+    $1, $2, $3
+)
+`
+
+type CreateEstimateOrderItemParams struct {
+	EstimateOrderID uuid.UUID `json:"estimate_order_id"`
+	ItemID          uuid.UUID `json:"item_id"`
+	Quantity        int32     `json:"quantity"`
+}
+
+func (q *Queries) CreateEstimateOrderItem(ctx context.Context, arg CreateEstimateOrderItemParams) error {
+	_, err := q.db.Exec(ctx, createEstimateOrderItem, arg.EstimateOrderID, arg.ItemID, arg.Quantity)
+	return err
+}
+
+const getEstimateOrderIds = `-- name: GetEstimateOrderIds :many
+SELECT id, merchant_id
+FROM estimate_orders
+WHERE estimate_id = $1
+ORDER BY id
+`
+
+type GetEstimateOrderIdsRow struct {
+	ID         uuid.UUID `json:"id"`
+	MerchantID uuid.UUID `json:"merchant_id"`
+}
+
+func (q *Queries) GetEstimateOrderIds(ctx context.Context, estimateID uuid.UUID) ([]GetEstimateOrderIdsRow, error) {
+	rows, err := q.db.Query(ctx, getEstimateOrderIds, estimateID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetEstimateOrderIdsRow{}
+	for rows.Next() {
+		var i GetEstimateOrderIdsRow
+		if err := rows.Scan(&i.ID, &i.MerchantID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getItemPrice = `-- name: GetItemPrice :one
