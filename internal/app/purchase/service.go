@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/uber/h3-go/v4"
 )
 
 var ErrNeedExactValidation = errors.New("ambiguous distance: need exact validation")
@@ -24,24 +25,14 @@ func NewPurchaseService(q *database.Queries) *PurchaseService {
 // validateWithH3PreFilter returns:
 // - nil → all merchants definitely ≤3000m
 // - ErrNeedExactValidation → some in ambiguous zone (2500–3500m)
-// - error → definitely >3000m or invalid
+// - error → definitely >3000m
 func (s *PurchaseService) validateWithH3PreFilter(
-	userLat, userLng float64,
+	userH3 h3.Cell,
 	merchantPoints []merchantPoint,
 ) error {
-	userH3, err := utils.LatLonToH3(userLat, userLng)
-	if err != nil {
-		return ErrNeedExactValidation
-	}
-
 	var ambiguous bool
 	for _, mp := range merchantPoints {
-		mH3, err := utils.LatLonToH3(mp.Lat, mp.Lng)
-		// fmt.Println("Merchant", mp.MerchantID, "H3:", mH3)
-		if err != nil {
-			return ErrNeedExactValidation
-		}
-		dist := utils.H3GridDistanceMeters(userH3, mH3)
+		dist := utils.H3GridDistanceMeters(userH3, mp.H3Cell)
 		if dist < 0 {
 			return ErrNeedExactValidation
 		}
@@ -61,12 +52,12 @@ func (s *PurchaseService) validateWithH3PreFilter(
 type merchantPoint struct {
 	MerchantID string
 	Lat, Lng   float64
+	H3Cell     h3.Cell
 	IsStart    bool
 	Order      Order
 }
 
 func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateRequest) (EstimateResponse, error) {
-	// === Validasi request ===
 	if len(req.Orders) == 0 {
 		return EstimateResponse{}, errors.New("orders cannot be empty")
 	}
@@ -80,22 +71,29 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 		return EstimateResponse{}, errors.New("exactly one order must have isStartingPoint=true")
 	}
 
-	// === Ambil data merchant & item ===
+	// === Ambil data & konversi ke H3 ===
 	var points []merchantPoint
 	totalPrice := int64(0)
 
+	userH3, err := utils.LatLonToH3(req.UserLocation.Lat, req.UserLocation.Long)
+	if err != nil {
+		return EstimateResponse{}, errors.New("invalid user location")
+	}
+
 	for _, o := range req.Orders {
 		parsedMerchantID, _ := uuid.Parse(o.MerchantID)
-
 		merchant, err := s.queries.GetMerchantLatLong(ctx, parsedMerchantID)
 		if err != nil {
 			return EstimateResponse{}, errors.New("merchant not found")
 		}
 
-		for _, item := range o.Items {
+		h3Cell, err := utils.LatLonToH3(merchant.Lat, merchant.Lng)
+		if err != nil {
+			return EstimateResponse{}, errors.New("invalid merchant location")
+		}
 
+		for _, item := range o.Items {
 			parsedItemID, _ := uuid.Parse(item.ItemID)
-			parsedMerchantID, _ := uuid.Parse(o.MerchantID)
 			price, err := s.queries.GetItemPrice(ctx, database.GetItemPriceParams{
 				ItemID:     parsedItemID,
 				MerchantID: parsedMerchantID,
@@ -110,19 +108,21 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 			MerchantID: o.MerchantID,
 			Lat:        merchant.Lat,
 			Lng:        merchant.Lng,
+			H3Cell:     h3Cell,
 			IsStart:    o.IsStartingPoint,
 			Order:      o,
 		})
 	}
 
-	// === Validasi jarak via H3 pre-filter ===
-	err := s.validateWithH3PreFilter(req.UserLocation.Lat, req.UserLocation.Long, points)
+	// === Validasi jarak: H3 pre-filter ===
+	err = s.validateWithH3PreFilter(userH3, points)
 	if err != nil && !errors.Is(err, ErrNeedExactValidation) {
 		return EstimateResponse{}, errors.New("coordinates too far")
 	}
 
-	// === Jika ambigu, validasi dengan Haversine (exact) ===
+	var useHaversineForTSP bool
 	if errors.Is(err, ErrNeedExactValidation) {
+		// Fallback: validasi exact dengan Haversine
 		for _, mp := range points {
 			d := utils.HaversineDistance(
 				req.UserLocation.Lat, req.UserLocation.Long,
@@ -132,9 +132,10 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 				return EstimateResponse{}, errors.New("coordinates too far")
 			}
 		}
+		useHaversineForTSP = false // use harversine for TSP as well
 	}
 
-	// === Bangun rute Nearest Neighbor ===
+	// === Bangun rute TSP ===
 	var start *merchantPoint
 	rest := make([]merchantPoint, 0)
 	for i := range points {
@@ -153,14 +154,26 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 
 	for len(rest) > 0 {
 		bestIdx := -1
-		bestDist := 1e15
-		for i, p := range rest {
-			d := utils.HaversineDistance(current.Lat, current.Lng, p.Lat, p.Lng)
-			if d < bestDist {
-				bestDist = d
-				bestIdx = i
+		if useHaversineForTSP {
+			bestDist := 1e15
+			for i, p := range rest {
+				d := utils.HaversineDistance(current.Lat, current.Lng, p.Lat, p.Lng)
+				if d < bestDist {
+					bestDist = d
+					bestIdx = i
+				}
+			}
+		} else {
+			// Gunakan H3 GridDistance untuk TSP
+			bestGridDist := int(^uint(0) >> 1)
+			for i, p := range rest {
+				if d, err := h3.GridDistance(current.H3Cell, p.H3Cell); err == nil && d < bestGridDist {
+					bestGridDist = d
+					bestIdx = i
+				}
 			}
 		}
+
 		if bestIdx == -1 {
 			break
 		}
@@ -171,21 +184,31 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 
 	// === Hitung total jarak ===
 	totalDist := 0.0
-	for i := 0; i < len(route)-1; i++ {
-		totalDist += utils.HaversineDistance(route[i].Lat, route[i].Lng, route[i+1].Lat, route[i+1].Lng)
+	if useHaversineForTSP {
+		for i := 0; i < len(route)-1; i++ {
+			totalDist += utils.HaversineDistance(route[i].Lat, route[i].Lng, route[i+1].Lat, route[i+1].Lng)
+		}
+		last := route[len(route)-1]
+		totalDist += utils.HaversineDistance(last.Lat, last.Lng, req.UserLocation.Lat, req.UserLocation.Long)
+	} else {
+		// Gunakan H3 untuk estimasi jarak total
+		totalGridDist := 0
+		for i := 0; i < len(route)-1; i++ {
+			if d, err := h3.GridDistance(route[i].H3Cell, route[i+1].H3Cell); err == nil {
+				totalGridDist += d
+			}
+		}
+		if d, err := h3.GridDistance(route[len(route)-1].H3Cell, userH3); err == nil {
+			totalGridDist += d
+		}
+		totalDist = float64(totalGridDist) * utils.EDGE_LENGTH_METERS
 	}
-	last := route[len(route)-1]
-	totalDist += utils.HaversineDistance(last.Lat, last.Lng, req.UserLocation.Lat, req.UserLocation.Long)
 
 	// === Estimasi waktu ===
 	timeMinutes := utils.EstimateTimeMinutes(totalDist)
 
-	orderJson, err := json.Marshal(req.Orders)
-	if err != nil {
-		return EstimateResponse{}, fmt.Errorf("failed to marshal orders: %w", err)
-	}
-
 	// === Simpan estimate ===
+	orderJson, _ := json.Marshal(req.Orders)
 	estimate, err := s.queries.CreateEstimate(ctx, database.CreateEstimateParams{
 		UserLat:                        req.UserLocation.Lat,
 		UserLng:                        req.UserLocation.Long,
