@@ -26,28 +26,20 @@ func NewPurchaseService(q *database.Queries, db *database.DB) *PurchaseService {
 }
 
 // validateWithH3PreFilter returns:
-// - nil → all merchants definitely ≤3000m
-// - ErrNeedExactValidation → some in ambiguous zone (2500–3500m)
-// - error → definitely >3000m
+// - nil → all merchants ≤3000m
+// - error → any merchant >3000m
 func (s *PurchaseService) validateWithH3PreFilter(
 	userH3 h3.Cell,
 	merchantPoints []merchantPoint,
 ) error {
-	var ambiguous bool
 	for _, mp := range merchantPoints {
 		dist := utils.H3GridDistanceMeters(userH3, mp.H3Cell)
 		if dist < 0 {
-			return ErrNeedExactValidation
-		}
-		if dist > utils.SAFE_REJECT_M {
 			return errors.New("coordinates too far")
 		}
-		if dist >= utils.SAFE_ACCEPT_M {
-			ambiguous = true
+		if dist > 3000 {
+			return errors.New("coordinates too far")
 		}
-	}
-	if ambiguous {
-		return ErrNeedExactValidation
 	}
 	return nil
 }
@@ -154,23 +146,12 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 	}
 
 	err = s.validateWithH3PreFilter(userH3, points)
-	if err != nil && !errors.Is(err, ErrNeedExactValidation) {
+	if err != nil {
 		return EstimateResponse{}, errors.New("coordinates too far")
 	}
 
-	var useHaversineForTSP bool
-	if errors.Is(err, ErrNeedExactValidation) {
-		for _, mp := range points {
-			d := utils.HaversineDistance(
-				req.UserLocation.Lat, req.UserLocation.Long,
-				mp.Lat, mp.Lng,
-			)
-			if d > 3000 {
-				return EstimateResponse{}, errors.New("coordinates too far")
-			}
-		}
-		useHaversineForTSP = false
-	}
+	// Always use H3 for TSP since we've validated with H3
+	const useHaversineForTSP = false
 
 	var start *merchantPoint
 	rest := make([]merchantPoint, 0)
