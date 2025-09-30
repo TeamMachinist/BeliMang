@@ -18,10 +18,16 @@ type Querier interface {
 	CreateEstimateOrder(ctx context.Context, arg CreateEstimateOrderParams) error
 	CreateEstimateOrderItem(ctx context.Context, arg CreateEstimateOrderItemParams) error
 	CreateItem(ctx context.Context, arg CreateItemParams) (uuid.UUID, error)
+	CreateOrderFromEstimate(ctx context.Context, dollar_1 uuid.UUID) (CreateOrderFromEstimateRow, error)
+	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) error
+	CreateOrderMerchant(ctx context.Context, arg CreateOrderMerchantParams) (uuid.UUID, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (Users, error)
+	GetEstimateById(ctx context.Context, dollar_1 uuid.UUID) (Estimates, error)
+	GetEstimateOrderDetails(ctx context.Context, dollar_1 uuid.UUID) ([]GetEstimateOrderDetailsRow, error)
 	GetEstimateOrderIds(ctx context.Context, estimateID uuid.UUID) ([]GetEstimateOrderIdsRow, error)
 	GetItemPrice(ctx context.Context, arg GetItemPriceParams) (int64, error)
 	GetMerchantLatLong(ctx context.Context, merchantID uuid.UUID) (GetMerchantLatLongRow, error)
+	GetOrderById(ctx context.Context, dollar_1 uuid.UUID) (Orders, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error)
 	GetUserByUsernameAndRole(ctx context.Context, arg GetUserByUsernameAndRoleParams) (Users, error)
 	GetUsersByRole(ctx context.Context, arg GetUsersByRoleParams) ([]GetUsersByRoleRow, error)

@@ -27,6 +27,14 @@ type EstimateResponse struct {
 	CalculatedEstimateId           string `json:"calculatedEstimateId"`
 }
 
+type CreateOrderRequest struct {
+	CalculatedEstimateId string `json:"calculatedEstimateId" validate:"required,uuid"`
+}
+
+type CreateOrderResponse struct {
+	OrderId string `json:"orderId"`
+}
+
 type MerchantPoint struct {
 	MerchantID string
 	Lat, Lng   float64

@@ -83,6 +83,26 @@ func (q *Queries) CreateEstimateOrderItem(ctx context.Context, arg CreateEstimat
 	return err
 }
 
+const getEstimateById = `-- name: GetEstimateById :one
+SELECT id, user_lat, user_lng, total_price, estimated_delivery_time_in_minutes, created_at
+FROM estimates
+WHERE id = $1::uuid
+`
+
+func (q *Queries) GetEstimateById(ctx context.Context, dollar_1 uuid.UUID) (Estimates, error) {
+	row := q.db.QueryRow(ctx, getEstimateById, dollar_1)
+	var i Estimates
+	err := row.Scan(
+		&i.ID,
+		&i.UserLat,
+		&i.UserLng,
+		&i.TotalPrice,
+		&i.EstimatedDeliveryTimeInMinutes,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getEstimateOrderIds = `-- name: GetEstimateOrderIds :many
 SELECT id, merchant_id
 FROM estimate_orders

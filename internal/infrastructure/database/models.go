@@ -101,6 +101,30 @@ type Merchants struct {
 	CreatedAt        time.Time   `json:"created_at"`
 }
 
+type OrderItems struct {
+	ID              uuid.UUID `json:"id"`
+	OrderMerchantID uuid.UUID `json:"order_merchant_id"`
+	ItemID          uuid.UUID `json:"item_id"`
+	Quantity        int32     `json:"quantity"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type OrderMerchants struct {
+	ID              uuid.UUID `json:"id"`
+	OrderID         uuid.UUID `json:"order_id"`
+	MerchantID      uuid.UUID `json:"merchant_id"`
+	IsStartingPoint bool      `json:"is_starting_point"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type Orders struct {
+	ID                             uuid.UUID `json:"id"`
+	EstimateID                     uuid.UUID `json:"estimate_id"`
+	TotalPrice                     int64     `json:"total_price"`
+	EstimatedDeliveryTimeInMinutes int32     `json:"estimated_delivery_time_in_minutes"`
+	CreatedAt                      time.Time `json:"created_at"`
+}
+
 type Users struct {
 	ID           uuid.UUID `json:"id"`
 	Username     string    `json:"username"`

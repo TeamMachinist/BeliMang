@@ -8,6 +8,11 @@ SELECT price
 FROM items
 WHERE id = @item_id::uuid AND merchant_id = @merchant_id::uuid;
 
+-- name: GetEstimateById :one
+SELECT id, user_lat, user_lng, total_price, estimated_delivery_time_in_minutes, created_at
+FROM estimates
+WHERE id = $1::uuid;
+
 -- name: CreateEstimate :one
 INSERT INTO estimates (
     user_lat, user_lng, total_price, estimated_delivery_time_in_minutes
