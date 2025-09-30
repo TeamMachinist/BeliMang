@@ -18,6 +18,8 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error)
 	GetUserByUsernameAndRole(ctx context.Context, arg GetUserByUsernameAndRoleParams) (Users, error)
 	GetUsersByRole(ctx context.Context, arg GetUsersByRoleParams) ([]GetUsersByRoleRow, error)
+	SearchMerchantsAsc(ctx context.Context, arg SearchMerchantsAscParams) ([]SearchMerchantsAscRow, error)
+	SearchMerchantsDesc(ctx context.Context, arg SearchMerchantsDescParams) ([]SearchMerchantsDescRow, error)
 	VerifyAdminByID(ctx context.Context, id uuid.UUID) (VerifyAdminByIDRow, error)
 	VerifyUserByID(ctx context.Context, id uuid.UUID) (VerifyUserByIDRow, error)
 }

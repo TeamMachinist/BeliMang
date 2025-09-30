@@ -1,5 +1,6 @@
 package merchant
 
+
 import (
 	"errors"
 	// "time"
@@ -22,6 +23,36 @@ type PostMerchantRequest struct {
 
 type PostMerchantResponse struct {
 	MerchantID string `json:"merchantId"`
+}
+
+// MerchantFilter holds filter params for searching merchants
+type MerchantFilter struct {
+	MerchantID       string
+	Name             string
+	MerchantCategory string
+	CreatedAtSort    string
+	Offset           int
+	Limit            int
+}
+
+type GetMerchantsResponse struct {
+	Data []MerchantItem `json:"data"`
+	Meta Meta           `json:"meta"`
+}
+
+type MerchantItem struct {
+	MerchantID       string   `json:"merchantId"`
+	Name             string   `json:"name"`
+	MerchantCategory string   `json:"merchantCategory"`
+	ImageURL         string   `json:"imageUrl"`
+	Location         Location `json:"location"`
+	CreatedAt        string   `json:"createdAt"`
+}
+
+type Meta struct {
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+	Total  int `json:"total"`
 }
 
 // Domain errors for user operations

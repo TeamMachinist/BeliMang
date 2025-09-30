@@ -3,7 +3,7 @@ package merchant
 import (
 	"net/http"
 	"strings"
-	
+	"strconv"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -26,7 +26,7 @@ func NewMerchantHandler(service *MerchantService, validate *validator.Validate) 
 }
 
 func (h *MerchantHandler) CreateMerchantHandler(c *gin.Context) {
-	// TODO: Verify Admin ID and Admin Role from middleware
+	// Verify Admin ID and Admin Role
 
 	var req PostMerchantRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -63,6 +63,53 @@ func (h *MerchantHandler) CreateMerchantHandler(c *gin.Context) {
 	c.JSON(http.StatusCreated, merchantID)
 }
 
+func (h *MerchantHandler) SearchMerchantsHandler(c *gin.Context) {
+   filter := MerchantFilter{
+	   MerchantID:       c.Query("merchantId"),
+	   Name:             c.Query("name"),
+	   MerchantCategory: c.Query("merchantCategory"),
+	   CreatedAtSort:    c.DefaultQuery("createdAt", "desc"),
+   }
+   // Parse limit & offset
+   if l := c.DefaultQuery("limit", "5"); l != "" {
+	   if v, err := strconv.Atoi(l); err == nil {
+		   filter.Limit = v
+	   } else {
+		   filter.Limit = 5
+	   }
+   } else {
+	   filter.Limit = 5
+   }
+   if o := c.DefaultQuery("offset", "0"); o != "" {
+	   if v, err := strconv.Atoi(o); err == nil {
+		   filter.Offset = v
+	   } else {
+		   filter.Offset = 0
+	   }
+   } else {
+	   filter.Offset = 0
+   }
+
+   // Validate merchantCategory
+   if filter.MerchantCategory != "" {
+	   if _, ok := validMerchantCategories[filter.MerchantCategory]; !ok {
+		   c.JSON(http.StatusOK, GetMerchantsResponse{Data: []MerchantItem{}, Meta: Meta{Limit: filter.Limit, Offset: filter.Offset, Total: 0}})
+		   return
+	   }
+   }
+   // Validate createdAtSort
+   if filter.CreatedAtSort != "asc" && filter.CreatedAtSort != "desc" {
+	   filter.CreatedAtSort = "desc"
+   }
+
+   resp, err := h.service.SearchMerchantsService(c, filter)
+   if err != nil {
+	   c.JSON(http.StatusInternalServerError, NewErrorResponse("internal error", err.Error()))
+	   return
+   }
+   c.JSON(http.StatusOK, resp)
+}
+
 var validMerchantCategories = map[string]struct{}{
 	"SmallRestaurant":       {},
 	"MediumRestaurant":      {},
@@ -84,24 +131,22 @@ func imageURLValidator(fl validator.FieldLevel) bool {
 
 // getValidationMessage returns a human-readable validation message
 func getValidationMessage(err validator.FieldError) string {
-   switch err.Tag() {
-   case "required":
-	   return "This field is required"
-   case "url":
-	   return "Must be a valid URL"
-   case "urlSuffix":
-	   return "Image URL must end with .jpg or .jpeg"
-   case "min":
-	   return "Value is too short (minimum " + err.Param() + " characters)"
-   case "max":
-	   return "Value is too long (maximum " + err.Param() + " characters)"
-   case "latitude":
-	   return "Latitude must be between -90 and 90"
-   case "longitude":
-	   return "Longitude must be between -180 and 180"
-   default:
-	   return "Invalid value"
-   }
+	switch err.Tag() {
+	case "required":
+		return "This field is required"
+	case "url":
+		return "Must be a valid URL"
+	case "min":
+		return "Value is too short (minimum " + err.Param() + " characters)"
+	case "max":
+		return "Value is too long (maximum " + err.Param() + " characters)"
+	case "latitude":
+		return "Latitude must be between -90 and 90"
+	case "longitude":
+		return "Longitude must be between -180 and 180"
+	default:
+		return "Invalid value"
+	}
 }
 
 func getFieldValue(err validator.FieldError) string {

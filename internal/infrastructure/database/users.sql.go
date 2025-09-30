@@ -7,9 +7,9 @@ package database
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const checkEmailExistsForRole = `-- name: CheckEmailExistsForRole :one
@@ -80,11 +80,11 @@ WHERE id = $1
 `
 
 type GetUserByIDRow struct {
-	ID        uuid.UUID          `json:"id"`
-	Username  string             `json:"username"`
-	Email     string             `json:"email"`
-	Role      UserRole           `json:"role"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+	Username  string    `json:"username"`
+	Email     string    `json:"email"`
+	Role      UserRole  `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error) {
@@ -140,11 +140,11 @@ type GetUsersByRoleParams struct {
 }
 
 type GetUsersByRoleRow struct {
-	ID        uuid.UUID          `json:"id"`
-	Username  string             `json:"username"`
-	Email     string             `json:"email"`
-	Role      UserRole           `json:"role"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID        uuid.UUID `json:"id"`
+	Username  string    `json:"username"`
+	Email     string    `json:"email"`
+	Role      UserRole  `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 func (q *Queries) GetUsersByRole(ctx context.Context, arg GetUsersByRoleParams) ([]GetUsersByRoleRow, error) {

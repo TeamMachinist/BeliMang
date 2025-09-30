@@ -16,8 +16,10 @@ sql:
         overrides:
           - db_type: "uuid"
             go_type: "github.com/google/uuid.UUID"
-          - db_type: "pg_catalog.timestamptz"
+          - db_type: "timestamptz"
             go_type: "time.Time"
           - db_type: "pg_catalog.varchar"
             go_type: "string"
             nullable: true
+          - db_type: "pg_catalog.int4" # PostgreSQL 32-bit integer
+            go_type: "int"

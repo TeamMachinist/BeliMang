@@ -7,9 +7,9 @@ package database
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createMerchant = `-- name: CreateMerchant :one
@@ -28,14 +28,14 @@ type CreateMerchantParams struct {
 }
 
 type CreateMerchantRow struct {
-	ID               uuid.UUID          `json:"id"`
-	AdminID          uuid.UUID          `json:"admin_id"`
-	Name             string             `json:"name"`
-	MerchantCategory string             `json:"merchant_category"`
-	ImageUrl         string             `json:"image_url"`
-	Lat              float64            `json:"lat"`
-	Lng              float64            `json:"lng"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ID               uuid.UUID `json:"id"`
+	AdminID          uuid.UUID `json:"admin_id"`
+	Name             string    `json:"name"`
+	MerchantCategory string    `json:"merchant_category"`
+	ImageUrl         string    `json:"image_url"`
+	Lat              float64   `json:"lat"`
+	Lng              float64   `json:"lng"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 func (q *Queries) CreateMerchant(ctx context.Context, arg CreateMerchantParams) (CreateMerchantRow, error) {
@@ -59,4 +59,153 @@ func (q *Queries) CreateMerchant(ctx context.Context, arg CreateMerchantParams) 
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const searchMerchantsAsc = `-- name: SearchMerchantsAsc :many
+SELECT 
+    id,
+    name,
+    merchant_category,
+    image_url,
+    lat,
+    lng,
+    created_at,
+    COUNT(*) OVER() AS total_count
+FROM merchants
+WHERE
+    ($1::uuid IS NULL OR $1 = '00000000-0000-0000-0000-000000000000'::uuid OR id = $1)
+    AND ($2::text IS NULL OR $2 = '' OR name ILIKE '%' || $2 || '%')
+    AND ($3::text IS NULL OR $3 = '' OR merchant_category = $3)
+ORDER BY 
+    created_at ASC
+LIMIT $4 OFFSET $5
+`
+
+type SearchMerchantsAscParams struct {
+	Column1 uuid.UUID `json:"column_1"`
+	Column2 string    `json:"column_2"`
+	Column3 string    `json:"column_3"`
+	Limit   int32     `json:"limit"`
+	Offset  int32     `json:"offset"`
+}
+
+type SearchMerchantsAscRow struct {
+	ID               uuid.UUID `json:"id"`
+	Name             string    `json:"name"`
+	MerchantCategory string    `json:"merchant_category"`
+	ImageUrl         string    `json:"image_url"`
+	Lat              float64   `json:"lat"`
+	Lng              float64   `json:"lng"`
+	CreatedAt        time.Time `json:"created_at"`
+	TotalCount       int64     `json:"total_count"`
+}
+
+func (q *Queries) SearchMerchantsAsc(ctx context.Context, arg SearchMerchantsAscParams) ([]SearchMerchantsAscRow, error) {
+	rows, err := q.db.Query(ctx, searchMerchantsAsc,
+		arg.Column1,
+		arg.Column2,
+		arg.Column3,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchMerchantsAscRow{}
+	for rows.Next() {
+		var i SearchMerchantsAscRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.MerchantCategory,
+			&i.ImageUrl,
+			&i.Lat,
+			&i.Lng,
+			&i.CreatedAt,
+			&i.TotalCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchMerchantsDesc = `-- name: SearchMerchantsDesc :many
+SELECT 
+    id,
+    name,
+    merchant_category,
+    image_url,
+    lat,
+    lng,
+    created_at,
+    COUNT(*) OVER() AS total_count
+FROM merchants
+WHERE
+    ($1::uuid IS NULL OR $1 = '00000000-0000-0000-0000-000000000000'::uuid OR id = $1)
+    AND ($2::text IS NULL OR $2 = '' OR name ILIKE '%' || $2 || '%')
+    AND ($3::text IS NULL OR $3 = '' OR merchant_category = $3)
+ORDER BY 
+    created_at DESC
+LIMIT $4
+OFFSET $5
+`
+
+type SearchMerchantsDescParams struct {
+	Column1 uuid.UUID `json:"column_1"`
+	Column2 string    `json:"column_2"`
+	Column3 string    `json:"column_3"`
+	Limit   int32     `json:"limit"`
+	Offset  int32     `json:"offset"`
+}
+
+type SearchMerchantsDescRow struct {
+	ID               uuid.UUID `json:"id"`
+	Name             string    `json:"name"`
+	MerchantCategory string    `json:"merchant_category"`
+	ImageUrl         string    `json:"image_url"`
+	Lat              float64   `json:"lat"`
+	Lng              float64   `json:"lng"`
+	CreatedAt        time.Time `json:"created_at"`
+	TotalCount       int64     `json:"total_count"`
+}
+
+func (q *Queries) SearchMerchantsDesc(ctx context.Context, arg SearchMerchantsDescParams) ([]SearchMerchantsDescRow, error) {
+	rows, err := q.db.Query(ctx, searchMerchantsDesc,
+		arg.Column1,
+		arg.Column2,
+		arg.Column3,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchMerchantsDescRow{}
+	for rows.Next() {
+		var i SearchMerchantsDescRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.MerchantCategory,
+			&i.ImageUrl,
+			&i.Lat,
+			&i.Lng,
+			&i.CreatedAt,
+			&i.TotalCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

@@ -7,9 +7,9 @@ package database
 import (
 	"database/sql/driver"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type UserRole string
@@ -55,22 +55,22 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 }
 
 type Merchants struct {
-	ID               uuid.UUID          `json:"id"`
-	AdminID          uuid.UUID          `json:"admin_id"`
-	Name             string             `json:"name"`
-	MerchantCategory string             `json:"merchant_category"`
-	ImageUrl         string             `json:"image_url"`
-	Lat              float64            `json:"lat"`
-	Lng              float64            `json:"lng"`
-	Location         interface{}        `json:"location"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+	ID               uuid.UUID   `json:"id"`
+	AdminID          uuid.UUID   `json:"admin_id"`
+	Name             string      `json:"name"`
+	MerchantCategory string      `json:"merchant_category"`
+	ImageUrl         string      `json:"image_url"`
+	Lat              float64     `json:"lat"`
+	Lng              float64     `json:"lng"`
+	Location         interface{} `json:"location"`
+	CreatedAt        time.Time   `json:"created_at"`
 }
 
 type Users struct {
-	ID           uuid.UUID          `json:"id"`
-	Username     string             `json:"username"`
-	PasswordHash string             `json:"password_hash"`
-	Email        string             `json:"email"`
-	Role         UserRole           `json:"role"`
-	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	ID           uuid.UUID `json:"id"`
+	Username     string    `json:"username"`
+	PasswordHash string    `json:"password_hash"`
+	Email        string    `json:"email"`
+	Role         UserRole  `json:"role"`
+	CreatedAt    time.Time `json:"created_at"`
 }
