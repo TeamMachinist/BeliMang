@@ -69,7 +69,7 @@ func main() {
 	// Purchase
 	purhcaseService := purchase.NewPurchaseService(db.Queries, db)
 	purchaseHandler := purchase.NewPurchaseHandler(purhcaseService)
-	purchase.PurchaseRoutes(router, purchaseHandler)
+	purchase.PurchaseRoutes(router, purchaseHandler, jwtService)
 
 	// Start HTTP server
 	srv := &http.Server{

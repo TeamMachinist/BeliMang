@@ -22,6 +22,12 @@ type EstimateResult struct {
 	EstimatedDeliveryTimeInMinutes int32
 }
 
+type OrderResult struct {
+	ID                             uuid.UUID
+	TotalPrice                     int64
+	EstimatedDeliveryTimeInMinutes int32
+}
+
 func (r *PurchaseRepository) CreateEstimateWithOrders(ctx context.Context, userLat, userLng, totalPrice float64, estimatedTime int32, orders []Order) (EstimateResult, error) {
 	var result EstimateResult
 
@@ -114,4 +120,88 @@ func (r *PurchaseRepository) CreateEstimateWithOrders(ctx context.Context, userL
 	result.EstimatedDeliveryTimeInMinutes = estimate.EstimatedDeliveryTimeInMinutes
 
 	return result, nil
+}
+
+func (r *PurchaseRepository) CreateOrderFromEstimate(ctx context.Context, estimateID uuid.UUID) (OrderResult, error) {
+	var result OrderResult
+
+	// Use transaction for performance and consistency
+	tx, err := r.db.Pool.Begin(ctx)
+	if err != nil {
+		return result, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	txQueries := r.db.Queries.WithTx(tx)
+
+	// First check if estimate exists
+	_, err = txQueries.GetEstimateById(ctx, estimateID)
+	if err != nil {
+		// This will handle both not found and other database errors
+		return result, fmt.Errorf("estimate not found: %w", err)
+	}
+
+	// Create the order from the estimate
+	order, err := txQueries.CreateOrderFromEstimate(ctx, estimateID)
+	if err != nil {
+		return result, fmt.Errorf("failed to create order from estimate: %w", err)
+	}
+
+	// Get the estimate order details to copy to the order
+	estimateDetails, err := txQueries.GetEstimateOrderDetails(ctx, estimateID)
+	if err != nil {
+		return result, fmt.Errorf("failed to get estimate details: %w", err)
+	}
+
+	// Group estimate details by merchant to create order merchants and items properly
+	merchantGroups := make(map[string][]database.GetEstimateOrderDetailsRow)
+	for _, detail := range estimateDetails {
+		merchantStr := detail.MerchantID.String()
+		merchantGroups[merchantStr] = append(merchantGroups[merchantStr], detail)
+	}
+
+	// Create order merchants and their items
+	for _, details := range merchantGroups {
+		// All items for the same merchant should belong to the same order merchant record
+		// Use the is_starting_point value from the first item for this merchant
+		firstDetail := details[0]
+		
+		orderMerchantID, err := txQueries.CreateOrderMerchant(ctx, database.CreateOrderMerchantParams{
+			OrderID:         order.ID,
+			MerchantID:      firstDetail.MerchantID,
+			IsStartingPoint: firstDetail.IsStartingPoint,
+		})
+		if err != nil {
+			return result, fmt.Errorf("failed to create order merchant: %w", err)
+		}
+
+		// Create order items for this merchant
+		for _, detail := range details {
+			err = txQueries.CreateOrderItem(ctx, database.CreateOrderItemParams{
+				OrderMerchantID: orderMerchantID,
+				ItemID:          detail.ItemID,
+				Quantity:        detail.Quantity,
+			})
+			if err != nil {
+				return result, fmt.Errorf("failed to create order item: %w", err)
+			}
+		}
+	}
+
+	// Commit transaction
+	err = tx.Commit(ctx)
+	if err != nil {
+		return result, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	result.ID = order.ID
+	result.TotalPrice = order.TotalPrice
+	result.EstimatedDeliveryTimeInMinutes = order.EstimatedDeliveryTimeInMinutes
+
+	return result, nil
+}
+
+// Helper method to get an estimate by ID (for validation)
+func (r *PurchaseRepository) GetEstimateById(ctx context.Context, estimateID uuid.UUID) (database.Estimates, error) {
+	return r.db.Queries.GetEstimateById(ctx, estimateID)
 }

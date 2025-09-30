@@ -212,11 +212,11 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 
 	// === Simpan estimate dengan repository ===
 	repository := NewPurchaseRepository(s.db)
-	estimate, err := repository.CreateEstimateWithOrders(ctx, 
-		req.UserLocation.Lat, 
-		req.UserLocation.Long, 
-		float64(totalPrice), 
-		int32(timeMinutes), 
+	estimate, err := repository.CreateEstimateWithOrders(ctx,
+		req.UserLocation.Lat,
+		req.UserLocation.Long,
+		float64(totalPrice),
+		int32(timeMinutes),
 		req.Orders)
 	if err != nil {
 		return EstimateResponse{}, fmt.Errorf("failed to save estimate: %w", err)
@@ -226,5 +226,23 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 		TotalPrice:                     estimate.TotalPrice,
 		EstimatedDeliveryTimeInMinutes: int(estimate.EstimatedDeliveryTimeInMinutes),
 		CalculatedEstimateId:           estimate.ID.String(),
+	}, nil
+}
+
+func (s *PurchaseService) CreateOrderByEstimateId(ctx context.Context, estimateID uuid.UUID) (CreateOrderResponse, error) {
+	repository := NewPurchaseRepository(s.db)
+
+	_, err := repository.GetEstimateById(ctx, estimateID)
+	if err != nil {
+		return CreateOrderResponse{}, errors.New("estimate not found")
+	}
+
+	order, err := repository.CreateOrderFromEstimate(ctx, estimateID)
+	if err != nil {
+		return CreateOrderResponse{}, fmt.Errorf("failed to create order from estimate: %w", err)
+	}
+
+	return CreateOrderResponse{
+		OrderId: order.ID.String(),
 	}, nil
 }
