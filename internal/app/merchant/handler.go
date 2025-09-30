@@ -93,7 +93,7 @@ func (h *MerchantHandler) SearchMerchantsHandler(c *gin.Context) {
    // Validate merchantCategory
    if filter.MerchantCategory != "" {
 	   if _, ok := validMerchantCategories[filter.MerchantCategory]; !ok {
-		   c.JSON(http.StatusOK, GetMerchantsResponse{Data: []MerchantItem{}, Meta: Meta{Limit: filter.Limit, Offset: filter.Offset, Total: 0}})
+		   c.JSON(http.StatusOK, GetMerchantsResponse{Data: []Merchant{}, Meta: Meta{Limit: filter.Limit, Offset: filter.Offset, Total: 0}})
 		   return
 	   }
    }

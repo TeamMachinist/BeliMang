@@ -12,6 +12,28 @@ import (
 	"github.com/google/uuid"
 )
 
+const countSearchMerchants = `-- name: CountSearchMerchants :one
+SELECT COUNT(id)
+FROM merchants
+WHERE
+    ($1::uuid IS NULL OR $1 = '00000000-0000-0000-0000-000000000000'::uuid OR id = $1)
+    AND ($2::text IS NULL OR $2 = '' OR name ILIKE '%' || $2 || '%')
+    AND ($3::text IS NULL OR $3 = '' OR merchant_category = $3)
+`
+
+type CountSearchMerchantsParams struct {
+	Column1 uuid.UUID `json:"column_1"`
+	Column2 string    `json:"column_2"`
+	Column3 string    `json:"column_3"`
+}
+
+func (q *Queries) CountSearchMerchants(ctx context.Context, arg CountSearchMerchantsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchMerchants, arg.Column1, arg.Column2, arg.Column3)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createMerchant = `-- name: CreateMerchant :one
 INSERT INTO merchants (admin_id, name, merchant_category, image_url, lat, lng, created_at)
 VALUES ($1, $2, $3, $4, $5, $6, NOW())
@@ -69,8 +91,7 @@ SELECT
     image_url,
     lat,
     lng,
-    created_at,
-    COUNT(*) OVER() AS total_count
+    created_at
 FROM merchants
 WHERE
     ($1::uuid IS NULL OR $1 = '00000000-0000-0000-0000-000000000000'::uuid OR id = $1)
@@ -97,7 +118,6 @@ type SearchMerchantsAscRow struct {
 	Lat              float64   `json:"lat"`
 	Lng              float64   `json:"lng"`
 	CreatedAt        time.Time `json:"created_at"`
-	TotalCount       int64     `json:"total_count"`
 }
 
 func (q *Queries) SearchMerchantsAsc(ctx context.Context, arg SearchMerchantsAscParams) ([]SearchMerchantsAscRow, error) {
@@ -123,7 +143,6 @@ func (q *Queries) SearchMerchantsAsc(ctx context.Context, arg SearchMerchantsAsc
 			&i.Lat,
 			&i.Lng,
 			&i.CreatedAt,
-			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}
@@ -143,8 +162,7 @@ SELECT
     image_url,
     lat,
     lng,
-    created_at,
-    COUNT(*) OVER() AS total_count
+    created_at
 FROM merchants
 WHERE
     ($1::uuid IS NULL OR $1 = '00000000-0000-0000-0000-000000000000'::uuid OR id = $1)
@@ -172,7 +190,6 @@ type SearchMerchantsDescRow struct {
 	Lat              float64   `json:"lat"`
 	Lng              float64   `json:"lng"`
 	CreatedAt        time.Time `json:"created_at"`
-	TotalCount       int64     `json:"total_count"`
 }
 
 func (q *Queries) SearchMerchantsDesc(ctx context.Context, arg SearchMerchantsDescParams) ([]SearchMerchantsDescRow, error) {
@@ -198,7 +215,6 @@ func (q *Queries) SearchMerchantsDesc(ctx context.Context, arg SearchMerchantsDe
 			&i.Lat,
 			&i.Lng,
 			&i.CreatedAt,
-			&i.TotalCount,
 		); err != nil {
 			return nil, err
 		}

@@ -3,6 +3,7 @@ package merchant
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"belimang/internal/infrastructure/cache"
@@ -71,7 +72,7 @@ func (s *MerchantService) SearchMerchantsService(ctx context.Context, filter Mer
 	if merchantCategory != "" {
 		if _, ok := validMerchantCategories[merchantCategory]; !ok {
 			return GetMerchantsResponse{
-				Data: []MerchantItem{},
+				Data: []Merchant{},
 				Meta: Meta{Limit: filter.Limit, Offset: filter.Offset, Total: 0},
 			}, nil
 		}
@@ -87,61 +88,98 @@ func (s *MerchantService) SearchMerchantsService(ctx context.Context, filter Mer
 	}
 
 	logger.DebugCtx(ctx, "Query search merchants", "merchantId", merchantId, "name", filter.Name, "category", merchantCategory, "sort", filter.CreatedAtSort)
-	if filter.CreatedAtSort == "asc" {
-		rows, err := s.db.SearchMerchantsAsc(ctx, database.SearchMerchantsAscParams{
+
+	// Execute both queries in parallel for maximum performance
+	var (
+		data     []Merchant
+		total    int64
+		errItems error
+		errCount error
+	)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	// Fetch items (uses index scan with LIMIT - fast!)
+	go func() {
+		defer wg.Done()
+		if filter.CreatedAtSort == "asc" {
+			rows, err := s.db.SearchMerchantsAsc(ctx, database.SearchMerchantsAscParams{
+				Column1: merchantId,
+				Column2: filter.Name,
+				Column3: filter.MerchantCategory,
+				Limit:   int32(limit),
+				Offset:  int32(offset),
+			})
+
+			if err != nil {
+				errItems = err
+				return
+			}
+
+			logger.InfoCtx(ctx, "Merchant searched successfully", "rows", rows)
+
+			// Convert immediately
+			data = make([]Merchant, len(rows))
+			for i, row := range rows {
+				data[i] = Merchant{
+					MerchantID:       row.ID.String(),
+					Name:             row.Name,
+					MerchantCategory: row.MerchantCategory,
+					ImageURL:         row.ImageUrl,
+					Location:         Location{Latitude: row.Lat, Longitude: row.Lng},
+					CreatedAt:        row.CreatedAt.Format(time.RFC3339Nano),
+				}
+			}
+		} else {
+			rows, err := s.db.SearchMerchantsDesc(ctx, database.SearchMerchantsDescParams{
+				Column1: merchantId,
+				Column2: filter.Name,
+				Column3: filter.MerchantCategory,
+				Limit:   int32(limit),
+				Offset:  int32(offset),
+			})
+
+			if err != nil {
+				errItems = err
+				return
+			}
+
+			// Convert immediately
+			data = make([]Merchant, len(rows))
+			for i, row := range rows {
+				data[i] = Merchant{
+					MerchantID:       row.ID.String(),
+					Name:             row.Name,
+					MerchantCategory: row.MerchantCategory,
+					ImageURL:         row.ImageUrl,
+					Location:         Location{Latitude: row.Lat, Longitude: row.Lng},
+					CreatedAt:        row.CreatedAt.Format(time.RFC3339Nano),
+				}
+			}
+		}
+	}()
+
+	// Fetch count
+	go func() {
+		defer wg.Done()
+		total, errCount = s.db.CountSearchMerchants(ctx, database.CountSearchMerchantsParams{
 			Column1: merchantId,
 			Column2: filter.Name,
 			Column3: filter.MerchantCategory,
-			Limit:   int32(limit),
-			Offset:  int32(offset),
 		})
-		if err != nil {
-			return GetMerchantsResponse{}, err
-		}
+	}()
 
-		// Map DB rows to response
-		items := make([]MerchantItem, 0, len(rows))
-		for _, r := range rows {
-			items = append(items, MerchantItem{
-				MerchantID:       r.ID.String(),
-				Name:             r.Name,
-				MerchantCategory: r.MerchantCategory,
-				ImageURL:         r.ImageUrl,
-				Location:         Location{Latitude: r.Lat, Longitude: r.Lng},
-				CreatedAt:        r.CreatedAt.Format(time.RFC3339Nano),
-			})
-		}
-		logger.InfoCtx(ctx, "Merchant searched successfully", "rows: ", rows)
-		// For total, you may want a count query, but for now, use len(rows)
-		meta := Meta{Limit: limit, Offset: offset, Total: int(rows[0].TotalCount)}
-		return GetMerchantsResponse{Data: items, Meta: meta}, nil
+	wg.Wait()
+
+	if errItems != nil {
+		return GetMerchantsResponse{}, errItems
+	}
+	if errCount != nil {
+		return GetMerchantsResponse{}, errCount
 	}
 
-	rows, err := s.db.SearchMerchantsDesc(ctx, database.SearchMerchantsDescParams{
-		Column1: merchantId,
-		Column2: filter.Name,
-		Column3: filter.MerchantCategory,
-		Limit:   int32(limit),
-		Offset:  int32(offset),
-	})
-	if err != nil {
-		return GetMerchantsResponse{}, err
-	}
-
-	// Map DB rows to response
-	items := make([]MerchantItem, 0, len(rows))
-	for _, r := range rows {
-		items = append(items, MerchantItem{
-			MerchantID:       r.ID.String(),
-			Name:             r.Name,
-			MerchantCategory: r.MerchantCategory,
-			ImageURL:         r.ImageUrl,
-			Location:         Location{Latitude: r.Lat, Longitude: r.Lng},
-			CreatedAt:        r.CreatedAt.Format(time.RFC3339Nano),
-		})
-	}
-	// For total, you may want a count query, but for now, use len(rows)
-	meta := Meta{Limit: limit, Offset: offset, Total: int(rows[0].TotalCount)}
-	logger.InfoCtx(ctx, "Merchant searched successfully", "rows: ", rows)
-	return GetMerchantsResponse{Data: items, Meta: meta}, nil
+	meta := Meta{Limit: limit, Offset: offset, Total: int(total)}
+	logger.InfoCtx(ctx, "Merchant searched successfully", "data", data, "Meta", meta)
+	return GetMerchantsResponse{Data: data, Meta: meta}, nil
 }

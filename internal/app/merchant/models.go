@@ -1,13 +1,9 @@
 package merchant
 
-
 import (
 	"errors"
 	// "time"
 )
-
-type Merchant struct {
-}
 
 type Location struct {
 	Latitude  float64 `json:"lat" validate:"required,latitude"`
@@ -36,11 +32,11 @@ type MerchantFilter struct {
 }
 
 type GetMerchantsResponse struct {
-	Data []MerchantItem `json:"data"`
+	Data []Merchant `json:"data"`
 	Meta Meta           `json:"meta"`
 }
 
-type MerchantItem struct {
+type Merchant struct {
 	MerchantID       string   `json:"merchantId"`
 	Name             string   `json:"name"`
 	MerchantCategory string   `json:"merchantCategory"`
