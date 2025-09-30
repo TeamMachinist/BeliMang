@@ -8,6 +8,20 @@ SELECT price
 FROM items
 WHERE id = @item_id::uuid AND merchant_id = @merchant_id::uuid;
 
+-- name: GetMerchantsLatLong :many
+SELECT id, lat, lng
+FROM merchants
+WHERE id = ANY(@merchant_id::uuid[]);
+
+-- name: GetItemPricesByIDsAndMerchants :many
+SELECT i.id, i.merchant_id, i.price
+FROM items i
+JOIN (
+    SELECT 
+        UNNEST(@item_id::uuid[]) AS item_id,
+        UNNEST(@merchant_id::uuid[]) AS merchant_id
+) AS pairs ON i.id = pairs.item_id AND i.merchant_id = pairs.merchant_id;
+
 -- name: GetEstimateById :one
 SELECT id, user_lat, user_lng, total_price, estimated_delivery_time_in_minutes, created_at
 FROM estimates

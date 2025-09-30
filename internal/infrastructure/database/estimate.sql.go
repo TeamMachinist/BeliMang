@@ -153,6 +153,47 @@ func (q *Queries) GetItemPrice(ctx context.Context, arg GetItemPriceParams) (int
 	return price, err
 }
 
+const getItemPricesByIDsAndMerchants = `-- name: GetItemPricesByIDsAndMerchants :many
+SELECT i.id, i.merchant_id, i.price
+FROM items i
+JOIN (
+    SELECT 
+        UNNEST($1::uuid[]) AS item_id,
+        UNNEST($2::uuid[]) AS merchant_id
+) AS pairs ON i.id = pairs.item_id AND i.merchant_id = pairs.merchant_id
+`
+
+type GetItemPricesByIDsAndMerchantsParams struct {
+	ItemID     []uuid.UUID `json:"item_id"`
+	MerchantID []uuid.UUID `json:"merchant_id"`
+}
+
+type GetItemPricesByIDsAndMerchantsRow struct {
+	ID         uuid.UUID `json:"id"`
+	MerchantID uuid.UUID `json:"merchant_id"`
+	Price      int64     `json:"price"`
+}
+
+func (q *Queries) GetItemPricesByIDsAndMerchants(ctx context.Context, arg GetItemPricesByIDsAndMerchantsParams) ([]GetItemPricesByIDsAndMerchantsRow, error) {
+	rows, err := q.db.Query(ctx, getItemPricesByIDsAndMerchants, arg.ItemID, arg.MerchantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetItemPricesByIDsAndMerchantsRow{}
+	for rows.Next() {
+		var i GetItemPricesByIDsAndMerchantsRow
+		if err := rows.Scan(&i.ID, &i.MerchantID, &i.Price); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getMerchantLatLong = `-- name: GetMerchantLatLong :one
 SELECT id, lat, lng
 FROM merchants
@@ -170,4 +211,36 @@ func (q *Queries) GetMerchantLatLong(ctx context.Context, merchantID uuid.UUID) 
 	var i GetMerchantLatLongRow
 	err := row.Scan(&i.ID, &i.Lat, &i.Lng)
 	return i, err
+}
+
+const getMerchantsLatLong = `-- name: GetMerchantsLatLong :many
+SELECT id, lat, lng
+FROM merchants
+WHERE id = ANY($1::uuid[])
+`
+
+type GetMerchantsLatLongRow struct {
+	ID  uuid.UUID `json:"id"`
+	Lat float64   `json:"lat"`
+	Lng float64   `json:"lng"`
+}
+
+func (q *Queries) GetMerchantsLatLong(ctx context.Context, merchantID []uuid.UUID) ([]GetMerchantsLatLongRow, error) {
+	rows, err := q.db.Query(ctx, getMerchantsLatLong, merchantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetMerchantsLatLongRow{}
+	for rows.Next() {
+		var i GetMerchantsLatLongRow
+		if err := rows.Scan(&i.ID, &i.Lat, &i.Lng); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
