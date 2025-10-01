@@ -9,6 +9,7 @@ import (
 	"belimang/internal/app/items"
 	"belimang/internal/app/purchase"
 	"belimang/internal/app/user"
+	"belimang/internal/app/merchant"
 	"belimang/internal/config"
 	"belimang/internal/infrastructure/cache"
 	"belimang/internal/infrastructure/database"
@@ -70,6 +71,11 @@ func main() {
 	purhcaseService := purchase.NewPurchaseService(db.Queries, db)
 	purchaseHandler := purchase.NewPurchaseHandler(purhcaseService)
 	purchase.PurchaseRoutes(router, purchaseHandler, jwtService)
+
+	// Initialize merchant components with shared dependencies
+	merchantService := merchant.NewMerchantService(redisCache, db.Queries)
+	merchantHandler := merchant.NewMerchantHandler(merchantService, validator)
+	merchant.MerchantRoutes(router, merchantHandler, jwtService)
 
 	// Start HTTP server
 	srv := &http.Server{

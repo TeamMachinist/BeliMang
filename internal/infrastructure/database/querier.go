@@ -14,10 +14,12 @@ type Querier interface {
 	CheckEmailExistsForRole(ctx context.Context, arg CheckEmailExistsForRoleParams) (bool, error)
 	CheckUsernameExists(ctx context.Context, username string) (bool, error)
 	CountItemsByMerchant(ctx context.Context, arg CountItemsByMerchantParams) (int64, error)
+	CountSearchMerchants(ctx context.Context, arg CountSearchMerchantsParams) (int64, error)
 	CreateEstimate(ctx context.Context, arg CreateEstimateParams) (CreateEstimateRow, error)
 	CreateEstimateOrder(ctx context.Context, arg CreateEstimateOrderParams) error
 	CreateEstimateOrderItem(ctx context.Context, arg CreateEstimateOrderItemParams) error
 	CreateItem(ctx context.Context, arg CreateItemParams) (uuid.UUID, error)
+	CreateMerchant(ctx context.Context, arg CreateMerchantParams) (CreateMerchantRow, error)
 	CreateOrderFromEstimate(ctx context.Context, dollar_1 uuid.UUID) (CreateOrderFromEstimateRow, error)
 	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) error
 	CreateOrderMerchant(ctx context.Context, arg CreateOrderMerchantParams) (uuid.UUID, error)
@@ -35,6 +37,8 @@ type Querier interface {
 	GetUsersByRole(ctx context.Context, arg GetUsersByRoleParams) ([]GetUsersByRoleRow, error)
 	ListItemsByMerchant(ctx context.Context, arg ListItemsByMerchantParams) ([]Items, error)
 	MerchantExists(ctx context.Context, id uuid.UUID) (bool, error)
+	SearchMerchantsAsc(ctx context.Context, arg SearchMerchantsAscParams) ([]SearchMerchantsAscRow, error)
+	SearchMerchantsDesc(ctx context.Context, arg SearchMerchantsDescParams) ([]SearchMerchantsDescRow, error)
 	VerifyAdminByID(ctx context.Context, id uuid.UUID) (VerifyAdminByIDRow, error)
 	VerifyUserByID(ctx context.Context, id uuid.UUID) (VerifyUserByIDRow, error)
 }

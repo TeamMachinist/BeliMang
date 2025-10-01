@@ -24,3 +24,5 @@ sql:
           - db_type: "pg_catalog.varchar"
             go_type: "string"
             nullable: true
+          - db_type: "pg_catalog.int4" # PostgreSQL 32-bit integer
+            go_type: "int"

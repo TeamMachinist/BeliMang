@@ -30,3 +30,8 @@ down-clean:
 	docker container prune -f
 	docker volume prune -f
 	docker system prune -f
+
+POSTGRES_USER ?= postgres
+POSTGRES_DB ?= belimang
+seed-dev:
+	docker compose -f compose.dev.yaml exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < ./seeds/01_seeds_data.sql
