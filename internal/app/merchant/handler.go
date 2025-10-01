@@ -132,18 +132,6 @@ func getUserID(c *gin.Context) (uuid.UUID, error) {
 	return userID, nil
 }
 
-func verifyAdminRole(c *gin.Context) (uuid.UUID, error) {
-	rawUserID, exists := c.Get("user_id")
-	if !exists {
-		return uuid.Nil, ErrUserNotFound
-	}
-	userID, ok := rawUserID.(uuid.UUID)
-	if !ok {
-		return uuid.Nil, ErrInvalidDataType
-	}
-	return userID, nil
-}
-
 func MerchantCategoryValidator(fl validator.FieldLevel) bool {
 	_, exists := validMerchantCategories[fl.Field().String()]
 	return exists
