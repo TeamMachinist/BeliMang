@@ -34,7 +34,7 @@ func main() {
 	logger.Init()
 
 	// Initialize database
-	db, err := database.NewDatabase(ctx, &cfg.Database)
+	db, err := database.NewDatabase(ctx, cfg.Database.DbUrl)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
