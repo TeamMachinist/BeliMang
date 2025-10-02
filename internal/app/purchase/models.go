@@ -7,7 +7,7 @@ type UserLocation struct {
 
 type OrderItem struct {
 	ItemID   string `json:"itemId" validate:"required,uuid"`
-	Quantity int64  `json:"quantity" validate:"required,min=1"`
+	Quantity int    `json:"quantity" validate:"required,min=1"`
 }
 
 type Order struct {

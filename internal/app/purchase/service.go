@@ -67,7 +67,7 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 	}
 
 	var points []merchantPoint
-	totalPrice := int64(0)
+	totalPrice := int(0)
 
 	userH3, err := utils.LatLonToH3(req.UserLocation.Lat, req.UserLocation.Long)
 	if err != nil {
@@ -94,7 +94,7 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 
 	var itemIDs []uuid.UUID
 	var itemMerchantIDs []uuid.UUID
-	itemQuantities := make(map[string]int64)
+	itemQuantities := make(map[string]int)
 
 	for _, o := range req.Orders {
 		parsedMerchantID := merchantIdMap[o.MerchantID]
@@ -119,7 +119,7 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 	for _, itemPrice := range itemPrices {
 		key := itemPrice.ID.String() + "-" + itemPrice.MerchantID.String()
 		if quantity, exists := itemQuantities[key]; exists {
-			totalPrice += itemPrice.Price * quantity
+			totalPrice += int(itemPrice.Price) * quantity
 		}
 	}
 
@@ -227,7 +227,7 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 		req.UserLocation.Lat,
 		req.UserLocation.Long,
 		float64(totalPrice),
-		int32(timeMinutes),
+		timeMinutes,
 		req.Orders)
 	if err != nil {
 		return EstimateResponse{}, fmt.Errorf("failed to save estimate: %w", err)

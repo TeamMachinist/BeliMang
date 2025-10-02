@@ -240,3 +240,7 @@ func (c *RedisCache) GetOrSet(ctx context.Context, key string, dest interface{},
 	jsonData, _ := json.Marshal(data)
 	return json.Unmarshal(jsonData, dest)
 }
+
+func (c *RedisCache) Client() *redis.Client {
+	return c.client
+}
