@@ -3,7 +3,7 @@ CREATE TYPE user_role AS ENUM ('user', 'admin');
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), 
+  id UUID PRIMARY KEY DEFAULT uuidv7(), 
   username VARCHAR(30) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   email VARCHAR(255) NOT NULL,

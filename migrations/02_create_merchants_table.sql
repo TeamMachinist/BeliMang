@@ -8,7 +8,7 @@ CREATE EXTENSION IF NOT EXISTS h3;
 
 -- Create merchants table
 CREATE TABLE IF NOT EXISTS merchants (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT uuidv7(),
     admin_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(30) NOT NULL CHECK (LENGTH(name) >= 2 AND LENGTH(name) <= 30),
     merchant_category VARCHAR(30) NOT NULL CHECK (
