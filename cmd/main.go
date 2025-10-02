@@ -7,9 +7,9 @@ import (
 	"net/http"
 
 	"belimang/internal/app/items"
+	"belimang/internal/app/merchant"
 	"belimang/internal/app/purchase"
 	"belimang/internal/app/user"
-	"belimang/internal/app/merchant"
 	"belimang/internal/config"
 	"belimang/internal/infrastructure/cache"
 	"belimang/internal/infrastructure/database"
@@ -65,7 +65,7 @@ func main() {
 	// Item
 	itemService := items.NewItemService(db.Queries)
 	itemHandler := items.NewItemHandler(itemService)
-	items.ItemRoutes(router, itemHandler)
+	items.ItemRoutes(router, itemHandler, jwtService)
 
 	// Purchase
 	purhcaseService := purchase.NewPurchaseService(db.Queries, db)

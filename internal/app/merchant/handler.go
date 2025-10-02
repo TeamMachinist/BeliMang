@@ -125,10 +125,8 @@ func getUserID(c *gin.Context) (uuid.UUID, error) {
 	if !exists {
 		return uuid.Nil, ErrUserNotFound
 	}
-	userID, ok := rawUserID.(uuid.UUID)
-	if !ok {
-		return uuid.Nil, ErrFailedConversion
-	}
+	userID, _ := uuid.Parse(rawUserID.(string))
+
 	return userID, nil
 }
 
