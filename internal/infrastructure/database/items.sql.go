@@ -81,13 +81,13 @@ const listItemsByMerchant = `-- name: ListItemsByMerchant :many
 SELECT id, merchant_id, name, product_category, price, image_url, created_at
 FROM items
 WHERE merchant_id = $1
-  AND ($2::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR id = $2::uuid)
-  AND ($3::text = '' OR name ILIKE '%' || $3::text || '%')
-  AND ($4::text = '' OR product_category = $4::text)
-ORDER BY 
-  CASE WHEN $5 = 'asc' THEN created_at END ASC,
-  CASE WHEN $5 = 'desc' THEN created_at END DESC,
-  created_at DESC  
+    AND ($2::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR id = $2::uuid)
+    AND ($3::text IS NULL OR $3::text = '' OR name ILIKE '%' || $3::text || '%')
+    AND ($4::text IS NULL OR $4::text = '' OR product_category = $4)
+ORDER BY
+    CASE WHEN $5 = 'asc' THEN created_at END ASC NULLS LAST,
+    CASE WHEN $5 = 'desc' THEN created_at END DESC NULLS LAST,
+    created_at DESC
 LIMIT $7 OFFSET $6
 `
 

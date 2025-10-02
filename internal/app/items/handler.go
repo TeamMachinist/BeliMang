@@ -148,7 +148,7 @@ func (h *ItemHandler) GetItems(c *gin.Context) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "merchant not found"})
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 

@@ -24,13 +24,13 @@ type CreateEstimateParams struct {
 	UserLat                        float64 `json:"user_lat"`
 	UserLng                        float64 `json:"user_lng"`
 	TotalPrice                     int64   `json:"total_price"`
-	EstimatedDeliveryTimeInMinutes int32   `json:"estimated_delivery_time_in_minutes"`
+	EstimatedDeliveryTimeInMinutes int     `json:"estimated_delivery_time_in_minutes"`
 }
 
 type CreateEstimateRow struct {
 	ID                             uuid.UUID `json:"id"`
 	TotalPrice                     int64     `json:"total_price"`
-	EstimatedDeliveryTimeInMinutes int32     `json:"estimated_delivery_time_in_minutes"`
+	EstimatedDeliveryTimeInMinutes int       `json:"estimated_delivery_time_in_minutes"`
 }
 
 func (q *Queries) CreateEstimate(ctx context.Context, arg CreateEstimateParams) (CreateEstimateRow, error) {
@@ -75,7 +75,7 @@ INSERT INTO estimate_order_items (
 type CreateEstimateOrderItemParams struct {
 	EstimateOrderID uuid.UUID `json:"estimate_order_id"`
 	ItemID          uuid.UUID `json:"item_id"`
-	Quantity        int32     `json:"quantity"`
+	Quantity        int       `json:"quantity"`
 }
 
 func (q *Queries) CreateEstimateOrderItem(ctx context.Context, arg CreateEstimateOrderItemParams) error {
