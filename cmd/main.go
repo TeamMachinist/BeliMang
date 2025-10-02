@@ -63,7 +63,7 @@ func main() {
 	user.RegisterRoutes(router, userHandler)
 
 	// Item
-	itemService := items.NewItemService(db.Queries)
+	itemService := items.NewItemService(db.Queries, redisCache)
 	itemHandler := items.NewItemHandler(itemService)
 	items.ItemRoutes(router, itemHandler, jwtService)
 
