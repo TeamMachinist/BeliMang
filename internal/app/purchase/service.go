@@ -257,3 +257,136 @@ func (s *PurchaseService) CreateOrderByEstimateId(ctx context.Context, estimateI
 		OrderId: order.ID.String(),
 	}, nil
 }
+
+// func (s *PurchaseService) getNearestMerchant(ctx context.Context, lat float64, lng float64) (merchantList, error) {
+
+// 	// 1. Generate H3 cell (resolusi 10 contoh)
+// 	resolution := 10
+// 	centerCell := h3.FromGeo(h3.GeoCoord{Lat: lat, Lng: lng}, resolution)
+
+// 	// 2. Cari merchant di H3 cell dan tetangganya
+// 	var candidates []Merchant
+// 	maxRings := 5 // batas pencarian
+// 	found := false
+
+// 	for ring := 0; ring <= maxRings && !found; ring++ {
+// 		neighbors := h3.KRing(centerCell, ring)
+// 		// Konversi []h3.Cell ke []int64
+// 		cellIDs := make([]int64, len(neighbors))
+// 		for i, cell := range neighbors {
+// 			cellIDs[i] = int64(cell)
+// 		}
+
+// 		// Query ke DB
+// 		query := `
+// 			SELECT id, name, lat, lng
+// 			FROM merchants
+// 			WHERE h3_cell = ANY($1)
+// 		`
+		
+// 		rows, err := s.db.Pool.Query(context.Background(), query, cellIDs)
+// 		if err != nil {
+// 			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "db query failed"})
+// 			return
+// 		}
+// 		defer rows.Close()
+
+// 		for rows.Next() {
+// 			var m Merchant
+// 			err := rows.Scan(&m.ID, &m.Name, &m.Lat, &m.Lng)
+// 			if err != nil {
+// 				continue
+// 			}
+// 			candidates = append(candidates, m)
+// 		}
+
+// 		if len(candidates) > 0 {
+// 			found = true
+// 		}
+// 	}
+
+// 	if len(candidates) == 0 {
+// 		// c.JSON(http.StatusNotFound, gin.H{"message": "no merchants found"})
+// 		// return
+// 	}
+
+// 	// 3. Hitung jarak & urutkan
+// 	type MerchantWithDistance struct {
+// 		Merchant
+// 		Distance float64
+// 	}
+// 	var results []MerchantWithDistance
+// 	for _, m := range candidates {
+// 		results = append(results, MerchantWithDistance{m, dist})
+// 	}
+
+// 	// Sort by distance
+// 	sort.Slice(results, func(i, j int) bool {
+// 		return results[i].Distance < results[j].Distance
+// 	})
+
+// 	// Ambil 1 terdekat (atau bisa ambil beberapa)
+// 	nearest := results[0]
+
+// 	c.JSON(http.StatusOK, gin.H{
+// 		"merchant": nearest.Merchant,
+// 		"distance_meters": nearest.Distance,
+// 	})
+// }
+
+func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, lat, lng float64) (GetMerchantsNearbyResponse, error) {
+	rows, err := s.queries.GetAllMerchantsWithItemsSortedByH3Distance(ctx, database.GetAllMerchantsWithItemsSortedByH3DistanceParams{Point: lat, Point_2: lng})
+	if err != nil {
+		return GetMerchantsNearbyResponse{}, fmt.Errorf("failed to fetch merchants with items: %w", err)
+	}
+
+	merchantMap := make(map[string]*MerchantWithItemsResponse)
+	for _, row := range rows {
+		merchantID := row.MerchantID.String()
+
+		if _, exists := merchantMap[merchantID]; !exists {
+			merchantMap[merchantID] = &MerchantWithItemsResponse{
+				Merchant: MerchantInfo{
+					MerchantID:       merchantID,
+					Name:             row.MerchantName,
+					MerchantCategory: row.MerchantCategory,
+					ImageUrl:         row.MerchantImageUrl,
+					Location: Location{
+						Lat:  row.Lat,
+						Long: row.Lng,
+					},
+					CreatedAt: row.MerchantCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
+				},
+				Items: []ItemInfo{},
+			}
+		}
+
+		// if row.ItemID.Valid {
+		// 	merchantMap[merchantID].Items = append(merchantMap[merchantID].Items, ItemInfo{
+		// 		ItemID:          row.ItemID.UUID.String(),
+		// 		Name:            row.ItemName,
+		// 		ProductCategory: row.ProductCategory,
+		// 		Price:           row.Price,
+		// 		ImageUrl:        row.ItemImageUrl,
+		// 		CreatedAt:       row.ItemCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
+		// 	})
+		// }
+	}
+
+	var data []MerchantWithItemsResponse
+	for _, m := range merchantMap {
+		data = append(data, *m)
+	}
+
+	// TODO: Untuk production, pertimbangkan pagination di DB level (lebih kompleks karena grouping)
+	// Untuk sekarang, kita asumsikan jumlah merchant terbatas (<100)
+
+	return GetMerchantsNearbyResponse{
+		Data: data,
+		Meta: PaginationMeta{
+			Limit:  0, // bisa diisi jika ada pagination
+			Offset: 0,
+			Total:  len(data),
+		},
+	}, nil
+}

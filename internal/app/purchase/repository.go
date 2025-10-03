@@ -45,7 +45,7 @@ func (r *PurchaseRepository) CreateEstimateWithOrders(ctx context.Context, userL
 		UserLat:                        userLat,
 		UserLng:                        userLng,
 		TotalPrice:                     int64(totalPrice),
-		EstimatedDeliveryTimeInMinutes: int32(estimatedTime),
+		EstimatedDeliveryTimeInMinutes: int(estimatedTime),
 	})
 	if err != nil {
 		return result, fmt.Errorf("failed to save estimate: %w", err)
@@ -101,7 +101,7 @@ func (r *PurchaseRepository) CreateEstimateWithOrders(ctx context.Context, userL
 			err = txQueries.CreateEstimateOrderItem(ctx, database.CreateEstimateOrderItemParams{
 				EstimateOrderID: estimateOrderId,
 				ItemID:          parsedItemID,
-				Quantity:        int32(item.Quantity),
+				Quantity:        int(item.Quantity),
 			})
 			if err != nil {
 				return result, fmt.Errorf("failed to save estimate order item: %w", err)
@@ -117,7 +117,7 @@ func (r *PurchaseRepository) CreateEstimateWithOrders(ctx context.Context, userL
 
 	result.ID = estimate.ID
 	result.TotalPrice = estimate.TotalPrice
-	result.EstimatedDeliveryTimeInMinutes = estimate.EstimatedDeliveryTimeInMinutes
+	result.EstimatedDeliveryTimeInMinutes = int32(estimate.EstimatedDeliveryTimeInMinutes)
 
 	return result, nil
 }
@@ -196,7 +196,7 @@ func (r *PurchaseRepository) CreateOrderFromEstimate(ctx context.Context, estima
 
 	result.ID = order.ID
 	result.TotalPrice = order.TotalPrice
-	result.EstimatedDeliveryTimeInMinutes = order.EstimatedDeliveryTimeInMinutes
+	result.EstimatedDeliveryTimeInMinutes = int32(order.EstimatedDeliveryTimeInMinutes)
 
 	return result, nil
 }

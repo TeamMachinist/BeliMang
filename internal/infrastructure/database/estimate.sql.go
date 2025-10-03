@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -24,13 +25,13 @@ type CreateEstimateParams struct {
 	UserLat                        float64 `json:"user_lat"`
 	UserLng                        float64 `json:"user_lng"`
 	TotalPrice                     int64   `json:"total_price"`
-	EstimatedDeliveryTimeInMinutes int32   `json:"estimated_delivery_time_in_minutes"`
+	EstimatedDeliveryTimeInMinutes int     `json:"estimated_delivery_time_in_minutes"`
 }
 
 type CreateEstimateRow struct {
 	ID                             uuid.UUID `json:"id"`
 	TotalPrice                     int64     `json:"total_price"`
-	EstimatedDeliveryTimeInMinutes int32     `json:"estimated_delivery_time_in_minutes"`
+	EstimatedDeliveryTimeInMinutes int       `json:"estimated_delivery_time_in_minutes"`
 }
 
 func (q *Queries) CreateEstimate(ctx context.Context, arg CreateEstimateParams) (CreateEstimateRow, error) {
@@ -75,12 +76,93 @@ INSERT INTO estimate_order_items (
 type CreateEstimateOrderItemParams struct {
 	EstimateOrderID uuid.UUID `json:"estimate_order_id"`
 	ItemID          uuid.UUID `json:"item_id"`
-	Quantity        int32     `json:"quantity"`
+	Quantity        int       `json:"quantity"`
 }
 
 func (q *Queries) CreateEstimateOrderItem(ctx context.Context, arg CreateEstimateOrderItemParams) error {
 	_, err := q.db.Exec(ctx, createEstimateOrderItem, arg.EstimateOrderID, arg.ItemID, arg.Quantity)
 	return err
+}
+
+const getAllMerchantsWithItemsSortedByH3Distance = `-- name: GetAllMerchantsWithItemsSortedByH3Distance :many
+SELECT
+    m.id AS merchant_id,
+    m.name AS merchant_name,
+    m.merchant_category,
+    m.image_url AS merchant_image_url,
+    m.lat,
+    m.lng,
+    m.created_at AS merchant_created_at,
+    i.id AS item_id,
+    i.name AS item_name,
+    i.product_category,
+    i.price,
+    i.image_url AS item_image_url,
+    i.created_at AS item_created_at,
+    h3_grid_distance(
+        h3_latlng_to_cell(Point($1, $2), 10),
+        m.h3_index
+    ) AS h3_distance
+FROM merchants m
+JOIN items i ON m.id = i.merchant_id
+ORDER BY h3_distance ASC, m.created_at DESC, i.created_at ASC
+`
+
+type GetAllMerchantsWithItemsSortedByH3DistanceParams struct {
+	Point   float64 `json:"point"`
+	Point_2 float64 `json:"point_2"`
+}
+
+type GetAllMerchantsWithItemsSortedByH3DistanceRow struct {
+	MerchantID        uuid.UUID   `json:"merchant_id"`
+	MerchantName      string      `json:"merchant_name"`
+	MerchantCategory  string      `json:"merchant_category"`
+	MerchantImageUrl  string      `json:"merchant_image_url"`
+	Lat               float64     `json:"lat"`
+	Lng               float64     `json:"lng"`
+	MerchantCreatedAt time.Time   `json:"merchant_created_at"`
+	ItemID            uuid.UUID   `json:"item_id"`
+	ItemName          string      `json:"item_name"`
+	ProductCategory   string      `json:"product_category"`
+	Price             int64       `json:"price"`
+	ItemImageUrl      string      `json:"item_image_url"`
+	ItemCreatedAt     time.Time   `json:"item_created_at"`
+	H3Distance        interface{} `json:"h3_distance"`
+}
+
+func (q *Queries) GetAllMerchantsWithItemsSortedByH3Distance(ctx context.Context, arg GetAllMerchantsWithItemsSortedByH3DistanceParams) ([]GetAllMerchantsWithItemsSortedByH3DistanceRow, error) {
+	rows, err := q.db.Query(ctx, getAllMerchantsWithItemsSortedByH3Distance, arg.Point, arg.Point_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllMerchantsWithItemsSortedByH3DistanceRow{}
+	for rows.Next() {
+		var i GetAllMerchantsWithItemsSortedByH3DistanceRow
+		if err := rows.Scan(
+			&i.MerchantID,
+			&i.MerchantName,
+			&i.MerchantCategory,
+			&i.MerchantImageUrl,
+			&i.Lat,
+			&i.Lng,
+			&i.MerchantCreatedAt,
+			&i.ItemID,
+			&i.ItemName,
+			&i.ProductCategory,
+			&i.Price,
+			&i.ItemImageUrl,
+			&i.ItemCreatedAt,
+			&i.H3Distance,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getEstimateById = `-- name: GetEstimateById :one

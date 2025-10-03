@@ -25,7 +25,7 @@ RETURNING id, total_price, estimated_delivery_time_in_minutes
 type CreateOrderFromEstimateRow struct {
 	ID                             uuid.UUID `json:"id"`
 	TotalPrice                     int64     `json:"total_price"`
-	EstimatedDeliveryTimeInMinutes int32     `json:"estimated_delivery_time_in_minutes"`
+	EstimatedDeliveryTimeInMinutes int       `json:"estimated_delivery_time_in_minutes"`
 }
 
 func (q *Queries) CreateOrderFromEstimate(ctx context.Context, dollar_1 uuid.UUID) (CreateOrderFromEstimateRow, error) {
@@ -45,7 +45,7 @@ VALUES ($1, $2, $3)
 type CreateOrderItemParams struct {
 	OrderMerchantID uuid.UUID `json:"order_merchant_id"`
 	ItemID          uuid.UUID `json:"item_id"`
-	Quantity        int32     `json:"quantity"`
+	Quantity        int       `json:"quantity"`
 }
 
 func (q *Queries) CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) error {
@@ -90,7 +90,7 @@ type GetEstimateOrderDetailsRow struct {
 	MerchantID      uuid.UUID `json:"merchant_id"`
 	IsStartingPoint bool      `json:"is_starting_point"`
 	ItemID          uuid.UUID `json:"item_id"`
-	Quantity        int32     `json:"quantity"`
+	Quantity        int       `json:"quantity"`
 }
 
 func (q *Queries) GetEstimateOrderDetails(ctx context.Context, dollar_1 uuid.UUID) ([]GetEstimateOrderDetailsRow, error) {
