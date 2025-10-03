@@ -32,7 +32,7 @@ func NewDatabase(ctx context.Context, cfg string) (*DB, error) {
 	config.HealthCheckPeriod = 1 * time.Minute // Regular health checks
 
 	// Connection timeout
-	config.ConnConfig.ConnectTimeout = 10 * time.Second
+	config.ConnConfig.ConnectTimeout = 1 * time.Second
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
