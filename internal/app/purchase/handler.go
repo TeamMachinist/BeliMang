@@ -1,7 +1,10 @@
 package purchase
 
 import (
+	"context"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -69,4 +72,48 @@ func (h *PurchaseHandler) CreateOrder(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func (h *PurchaseHandler) GetMerchantsNearbyHandler(c *gin.Context) {
+	coords := c.Param("coords")
+	parts := strings.Split(coords, ",")
+	if len(parts) != 2 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coordinates format. Use lat,lng"})
+		return
+	}
+
+	lat, err := strconv.ParseFloat(parts[0], 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid latitude"})
+		return
+	}
+
+	lng, err := strconv.ParseFloat(parts[1], 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid longitude"})
+		return
+	}
+
+	// Validate ranges
+	if lat < -90 || lat > 90 || lng < -180 || lng > 180 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "latitude must be [-90,90], longitude [-180,180]"})
+		return
+	}
+
+
+	// Call service
+	ctx := context.Background() // or use c.Request.Context() if you have timeouts/tracing
+	response, err := h.purchaseService.GetMerchantsNearby(ctx, lat, lng)
+	if err != nil {
+		// Log the error internally
+		// logger.Error("Failed to get nearby merchants", "error", err)
+
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to fetch nearby merchants",
+		})
+		return
+	}
+
+	// Return success response
+	c.JSON(http.StatusOK, response)
 }

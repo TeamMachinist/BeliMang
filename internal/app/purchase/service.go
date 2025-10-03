@@ -257,3 +257,59 @@ func (s *PurchaseService) CreateOrderByEstimateId(ctx context.Context, estimateI
 		OrderId: order.ID.String(),
 	}, nil
 }
+func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, lat, lng float64) (GetMerchantsNearbyResponse, error) {
+	rows, err := s.queries.GetAllMerchantsWithItemsSortedByH3Distance(ctx, database.GetAllMerchantsWithItemsSortedByH3DistanceParams{Point: lat, Point_2: lng})
+	if err != nil {
+		return GetMerchantsNearbyResponse{}, fmt.Errorf("failed to fetch merchants with items: %w", err)
+	}
+
+	merchantMap := make(map[string]*MerchantWithItemsResponse)
+	for _, row := range rows {
+		merchantID := row.MerchantID.String()
+
+		if _, exists := merchantMap[merchantID]; !exists {
+			merchantMap[merchantID] = &MerchantWithItemsResponse{
+				Merchant: MerchantInfo{
+					MerchantID:       merchantID,
+					Name:             row.MerchantName,
+					MerchantCategory: row.MerchantCategory,
+					ImageUrl:         row.MerchantImageUrl,
+					Location: Location{
+						Lat:  row.Lat,
+						Long: row.Lng,
+					},
+					CreatedAt: row.MerchantCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
+				},
+				Items: []ItemInfo{},
+			}
+		}
+
+		// if row.ItemID.Valid {
+		// 	merchantMap[merchantID].Items = append(merchantMap[merchantID].Items, ItemInfo{
+		// 		ItemID:          row.ItemID.UUID.String(),
+		// 		Name:            row.ItemName,
+		// 		ProductCategory: row.ProductCategory,
+		// 		Price:           row.Price,
+		// 		ImageUrl:        row.ItemImageUrl,
+		// 		CreatedAt:       row.ItemCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
+		// 	})
+		// }
+	}
+
+	var data []MerchantWithItemsResponse
+	for _, m := range merchantMap {
+		data = append(data, *m)
+	}
+
+	// TODO: Untuk production, pertimbangkan pagination di DB level (lebih kompleks karena grouping)
+	// Untuk sekarang, kita asumsikan jumlah merchant terbatas (<100)
+
+	return GetMerchantsNearbyResponse{
+		Data: data,
+		Meta: PaginationMeta{
+			Limit:  0, // bisa diisi jika ada pagination
+			Offset: 0,
+			Total:  len(data),
+		},
+	}, nil
+}

@@ -48,8 +48,8 @@ services:
       - belimang-network
 
 volumes:
-  postgres_data: /var/lib/postgresql/data # ← extra space after colon!
-  redis_data: /data
+  postgres_data: # /var/lib/postgresql/data # ← extra space after colon!
+  redis_data: # /data
   go_modules:
 
 networks:

@@ -54,3 +54,26 @@ SELECT id, merchant_id
 FROM estimate_orders
 WHERE estimate_id = @estimate_id
 ORDER BY id;
+
+-- name: GetAllMerchantsWithItemsSortedByH3Distance :many
+SELECT
+    m.id AS merchant_id,
+    m.name AS merchant_name,
+    m.merchant_category,
+    m.image_url AS merchant_image_url,
+    m.lat,
+    m.lng,
+    m.created_at AS merchant_created_at,
+    i.id AS item_id,
+    i.name AS item_name,
+    i.product_category,
+    i.price,
+    i.image_url AS item_image_url,
+    i.created_at AS item_created_at,
+    h3_grid_distance(
+        h3_latlng_to_cell(Point($1, $2), 10),
+        m.h3_index
+    ) AS h3_distance
+FROM merchants m
+JOIN items i ON m.id = i.merchant_id
+ORDER BY h3_distance ASC, m.created_at DESC, i.created_at ASC; 
