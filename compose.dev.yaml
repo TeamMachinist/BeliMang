@@ -1,7 +1,9 @@
-# docker-compose.yml
 services:
   postgres:
-    image: postgis/postgis:15-3.4-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      target: postgres-h3
     container_name: belimang-postgres
     env_file: .env
     environment:
@@ -17,15 +19,17 @@ services:
     restart: unless-stopped
     networks:
       - belimang-network
+    command: ["postgres"]
+
   redis:
     image: redis:7-alpine
     container_name: belimang-redis
-    env_file:
-      - .env
+    env_file: .env
     ports:
       - "${CACHE_PORT}:6379"
     volumes:
       - redis_data:/data
+    restart: unless-stopped
     networks:
       - belimang-network
 
@@ -33,13 +37,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dev
+      target: app-dev
     container_name: belimang-app
     env_file: .env
     volumes:
       - .:/app:cached
       - go_modules:/go/pkg/mod
     ports:
-      - "${SERVER_PORT:-8080}:8080"
+      - "${HTTP_PORT:-8080}:8080"
+    environment:
+      ENV: development
+      HTTP_PORT: ${HTTP_PORT}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_ADDR: ${REDIS_ADDR}
     restart: unless-stopped
     depends_on:
       - postgres
@@ -48,8 +58,8 @@ services:
       - belimang-network
 
 volumes:
-  postgres_data: /var/lib/postgresql/data # ← extra space after colon!
-  redis_data: /data
+  postgres_data:
+  redis_data:
   go_modules:
 
 networks:
