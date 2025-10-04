@@ -7,16 +7,17 @@ package database
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 const createOrderFromEstimate = `-- name: CreateOrderFromEstimate :one
 INSERT INTO orders (
-    estimate_id, total_price, estimated_delivery_time_in_minutes
+    user_id, estimate_id, total_price, estimated_delivery_time_in_minutes
 ) 
 SELECT 
-    id, total_price, estimated_delivery_time_in_minutes
+    user_id, id, total_price, estimated_delivery_time_in_minutes
 FROM estimates
 WHERE id = $1::uuid
 RETURNING id, total_price, estimated_delivery_time_in_minutes
@@ -124,9 +125,17 @@ FROM orders
 WHERE id = $1::uuid
 `
 
-func (q *Queries) GetOrderById(ctx context.Context, dollar_1 uuid.UUID) (Orders, error) {
+type GetOrderByIdRow struct {
+	ID                             uuid.UUID `json:"id"`
+	EstimateID                     uuid.UUID `json:"estimate_id"`
+	TotalPrice                     int64     `json:"total_price"`
+	EstimatedDeliveryTimeInMinutes int       `json:"estimated_delivery_time_in_minutes"`
+	CreatedAt                      time.Time `json:"created_at"`
+}
+
+func (q *Queries) GetOrderById(ctx context.Context, dollar_1 uuid.UUID) (GetOrderByIdRow, error) {
 	row := q.db.QueryRow(ctx, getOrderById, dollar_1)
-	var i Orders
+	var i GetOrderByIdRow
 	err := row.Scan(
 		&i.ID,
 		&i.EstimateID,

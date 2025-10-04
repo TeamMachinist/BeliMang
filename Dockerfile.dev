@@ -1,12 +1,18 @@
-FROM golang:1.25
+FROM postgres:18 AS postgres-h3
 
-# Install git dan build tools
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    ca-certificates \
+    postgresql-18-h3 && \
+    rm -rf /var/lib/apt/lists/*
+
+FROM golang:1.25 AS app-dev
+
 RUN apt-get update && apt-get install -y \
     git \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Air
 RUN go install github.com/air-verse/air@latest
 
 WORKDIR /app

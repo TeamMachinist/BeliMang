@@ -52,10 +52,36 @@ type merchantPoint struct {
 	Order      Order
 }
 
-func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateRequest) (EstimateResponse, error) {
+func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, userID uuid.UUID, req EstimateRequest) (EstimateResponse, error) {
 	if len(req.Orders) == 0 {
 		return EstimateResponse{}, errors.New("orders cannot be empty")
 	}
+
+	var merchantIDs []uuid.UUID
+	merchantIdMap := make(map[string]uuid.UUID)
+	for _, o := range req.Orders {
+		parsedMerchantID, err := uuid.Parse(o.MerchantID)
+		if err != nil {
+			return EstimateResponse{}, errors.New("merchant not found")
+		}
+		merchantIDs = append(merchantIDs, parsedMerchantID)
+		merchantIdMap[o.MerchantID] = parsedMerchantID
+	}
+
+	merchants, err := s.queries.GetMerchantsLatLong(ctx, merchantIDs)
+	if err != nil {
+		return EstimateResponse{}, errors.New("failed to fetch merchants")
+	}
+
+	if len(merchants) != len(merchantIDs) {
+		return EstimateResponse{}, errors.New("merchant not found")
+	}
+
+	merchantMap := make(map[uuid.UUID]database.GetMerchantsLatLongRow)
+	for _, m := range merchants {
+		merchantMap[m.ID] = m
+	}
+
 	startCount := 0
 	for _, o := range req.Orders {
 		if o.IsStartingPoint {
@@ -74,24 +100,6 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 		return EstimateResponse{}, errors.New("invalid user location")
 	}
 
-	var merchantIDs []uuid.UUID
-	merchantIdMap := make(map[string]uuid.UUID)
-	for _, o := range req.Orders {
-		parsedMerchantID, _ := uuid.Parse(o.MerchantID)
-		merchantIDs = append(merchantIDs, parsedMerchantID)
-		merchantIdMap[o.MerchantID] = parsedMerchantID
-	}
-
-	merchants, err := s.queries.GetMerchantsLatLong(ctx, merchantIDs)
-	if err != nil {
-		return EstimateResponse{}, errors.New("failed to fetch merchants")
-	}
-
-	merchantMap := make(map[uuid.UUID]database.GetMerchantsLatLongRow)
-	for _, m := range merchants {
-		merchantMap[m.ID] = m
-	}
-
 	var itemIDs []uuid.UUID
 	var itemMerchantIDs []uuid.UUID
 	itemQuantities := make(map[string]int)
@@ -99,7 +107,10 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 	for _, o := range req.Orders {
 		parsedMerchantID := merchantIdMap[o.MerchantID]
 		for _, item := range o.Items {
-			parsedItemID, _ := uuid.Parse(item.ItemID)
+			parsedItemID, err := uuid.Parse(item.ItemID)
+			if err != nil {
+				return EstimateResponse{}, errors.New("item not found")
+			}
 			itemIDs = append(itemIDs, parsedItemID)
 			itemMerchantIDs = append(itemMerchantIDs, parsedMerchantID)
 
@@ -116,10 +127,22 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 		return EstimateResponse{}, errors.New("failed to fetch item prices")
 	}
 
+	if len(itemPrices) != len(itemIDs) {
+		return EstimateResponse{}, errors.New("item not found")
+	}
+
+	foundItems := make(map[string]bool)
 	for _, itemPrice := range itemPrices {
 		key := itemPrice.ID.String() + "-" + itemPrice.MerchantID.String()
+		foundItems[key] = true
 		if quantity, exists := itemQuantities[key]; exists {
 			totalPrice += int(itemPrice.Price) * quantity
+		}
+	}
+
+	for key := range itemQuantities {
+		if !foundItems[key] {
+			return EstimateResponse{}, errors.New("item not found")
 		}
 	}
 
@@ -207,7 +230,6 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 		last := route[len(route)-1]
 		totalDist += utils.HaversineDistance(last.Lat, last.Lng, req.UserLocation.Lat, req.UserLocation.Long)
 	} else {
-		// Gunakan H3 untuk estimasi jarak total
 		totalGridDist := 0
 		for i := 0; i < len(route)-1; i++ {
 			if d, err := h3.GridDistance(route[i].H3Cell, route[i+1].H3Cell); err == nil {
@@ -224,6 +246,7 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 
 	repository := NewPurchaseRepository(s.db)
 	estimate, err := repository.CreateEstimateWithOrders(ctx,
+		userID,
 		req.UserLocation.Lat,
 		req.UserLocation.Long,
 		float64(totalPrice),
@@ -240,7 +263,7 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 	}, nil
 }
 
-func (s *PurchaseService) CreateOrderByEstimateId(ctx context.Context, estimateID uuid.UUID) (CreateOrderResponse, error) {
+func (s *PurchaseService) CreateOrderByEstimateId(ctx context.Context, userID uuid.UUID, estimateID uuid.UUID) (CreateOrderResponse, error) {
 	repository := NewPurchaseRepository(s.db)
 
 	_, err := repository.GetEstimateById(ctx, estimateID)
@@ -248,7 +271,7 @@ func (s *PurchaseService) CreateOrderByEstimateId(ctx context.Context, estimateI
 		return CreateOrderResponse{}, errors.New("estimate not found")
 	}
 
-	order, err := repository.CreateOrderFromEstimate(ctx, estimateID)
+	order, err := repository.CreateOrderFromEstimate(ctx, userID, estimateID)
 	if err != nil {
 		return CreateOrderResponse{}, fmt.Errorf("failed to create order from estimate: %w", err)
 	}

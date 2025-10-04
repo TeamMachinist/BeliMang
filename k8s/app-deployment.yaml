@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: belimang-app-deployment
+  namespace: belimang
+  labels:
+    app: belimang-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: belimang-app
+  template:
+    metadata:
+      labels:
+        app: belimang-app
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: belimang-app
+          image: belimang-app:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+          env:
+            - name: ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: belimang-config
+                  key: ENV
+            - name: GIN_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: belimang-config
+                  key: GIN_MODE
+            - name: HTTP_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: belimang-config
+                  key: HTTP_PORT
+            - name: DATABASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: belimang-config
+                  key: DATABASE_URL
+            - name: REDIS_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: belimang-config
+                  key: REDIS_ADDR
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                configMapKeyRef:
+                  name: belimang-config
+                  key: JWT_SECRET_KEY
+            - name: JWT_ISSUER
+              valueFrom:
+                configMapKeyRef:
+                  name: belimang-config
+                  key: JWT_ISSUER
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: belimang-config
+                  key: LOG_LEVEL
+            - name: LOG_TYPE
+              valueFrom:
+                configMapKeyRef:
+                  name: belimang-config
+                  key: LOG_TYPE
+            - name: GOMAXPROCS
+              valueFrom:
+                configMapKeyRef:
+                  name: belimang-config
+                  key: GOMAXPROCS
+            - name: GOMEMLIMIT
+              valueFrom:
+                configMapKeyRef:
+                  name: belimang-config
+                  key: GOMEMLIMIT
+            - name: GODEBUG
+              valueFrom:
+                configMapKeyRef:
+                  name: belimang-config
+                  key: GODEBUG
+            - name: GOCACHE
+              valueFrom:
+                configMapKeyRef:
+                  name: belimang-config
+                  key: GOCACHE
+            - name: GOTMPDIR
+              valueFrom:
+                configMapKeyRef:
+                  name: belimang-config
+                  key: GOTMPDIR
+          livenessProbe:
+            exec:
+              command:
+                - /app/server
+                - health
+            initialDelaySeconds: 40
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - /app/server
+                - health
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: "4"
+              memory: "2Gi"
+            requests:
+              cpu: "2"
+              memory: "512Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_BIND_SERVICE
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+            - name: go-cache-volume
+              mountPath: /tmp/go-cache
+            - name: go-tmp-volume
+              mountPath: /tmp/go-tmp
+      volumes:
+        - name: tmp-volume
+          emptyDir:
+            sizeLimit: 2Gi
+        - name: go-cache-volume
+          emptyDir:
+            sizeLimit: 1Gi
+        - name: go-tmp-volume
+          emptyDir:
+            sizeLimit: 1Gi

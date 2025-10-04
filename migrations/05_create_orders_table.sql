@@ -1,5 +1,6 @@
 CREATE TABLE orders (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     estimate_id UUID NOT NULL REFERENCES estimates(id) ON DELETE CASCADE,
     total_price BIGINT NOT NULL,
     estimated_delivery_time_in_minutes INT NOT NULL,
