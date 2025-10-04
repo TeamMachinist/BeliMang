@@ -33,12 +33,12 @@ services:
     networks:
       - belimang-network
 
-  app:
+  app-dev:
     build:
       context: .
       dockerfile: Dockerfile.dev
       target: app-dev
-    container_name: belimang-app
+    container_name: belimang-app-dev
     env_file: .env
     volumes:
       - .:/app:cached

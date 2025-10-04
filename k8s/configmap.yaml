@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: belimang-config
+  namespace: belimang
+data:
+  ENV: "production"
+  GIN_MODE: "release"
+  HTTP_PORT: "8080"
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DB_USER: "postgres"
+  DB_PASSWORD: "password"
+  DB_NAME: "belimang"
+  DB_SSLMODE: "disable"
+  DATABASE_URL: "postgres://postgres:password@postgres-service:5432/belimang?sslmode=disable"
+  CACHE_HOST: "redis-service"
+  CACHE_PORT: "6379"
+  CACHE_PASSWORD: ""
+  CACHE_DB: "0"
+  REDIS_ADDR: "redis-service:6379"
+  LOG_LEVEL: "info"
+  LOG_TYPE: "simple"
+  JWT_SECRET_KEY: "your-secret-key-change-in-production"
+  JWT_ISSUER: "belimang-app"
+  GOMAXPROCS: "4"
+  GOMEMLIMIT: "1536MiB"
+  GODEBUG: "asyncpreemptoff=1"
+  GOCACHE: "/tmp/go-cache"
+  GOTMPDIR: "/tmp/go-tmp"
