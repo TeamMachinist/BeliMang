@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"belimang/internal/app/image"
 	"belimang/internal/app/items"
 	"belimang/internal/app/merchant"
 	"belimang/internal/app/purchase"
@@ -76,6 +77,10 @@ func main() {
 	merchantService := merchant.NewMerchantService(redisCache, db.Queries)
 	merchantHandler := merchant.NewMerchantHandler(merchantService, validator)
 	merchant.MerchantRoutes(router, merchantHandler, jwtService)
+
+	// Image
+	imageHandler := image.NewImageHandler()
+	image.RegisterRoutes(router, imageHandler)
 
 	// Start HTTP server
 	srv := &http.Server{

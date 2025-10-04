@@ -40,6 +40,9 @@ services:
       target: app-dev
     container_name: belimang-app-dev
     env_file: .env
+    environment:
+      - DB_HOST=postgres
+      - CACHE_HOST=redis
     volumes:
       - .:/app:cached
       - go_modules:/go/pkg/mod
