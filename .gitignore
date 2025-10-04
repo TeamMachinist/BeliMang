@@ -62,3 +62,4 @@ config/local.yaml
 config/production.yaml
 
 dummy.sql
+test
