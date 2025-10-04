@@ -105,12 +105,14 @@ SELECT
     ) AS h3_distance
 FROM merchants m
 JOIN items i ON m.id = i.merchant_id
+WHERE ($3 = '' OR m.name ILIKE '%' || $3 || '%')
 ORDER BY h3_distance ASC, m.created_at DESC, i.created_at ASC
 `
 
 type GetAllMerchantsWithItemsSortedByH3DistanceParams struct {
-	Point   float64 `json:"point"`
-	Point_2 float64 `json:"point_2"`
+	Point   float64     `json:"point"`
+	Point_2 float64     `json:"point_2"`
+	Column3 interface{} `json:"column_3"`
 }
 
 type GetAllMerchantsWithItemsSortedByH3DistanceRow struct {
@@ -131,7 +133,7 @@ type GetAllMerchantsWithItemsSortedByH3DistanceRow struct {
 }
 
 func (q *Queries) GetAllMerchantsWithItemsSortedByH3Distance(ctx context.Context, arg GetAllMerchantsWithItemsSortedByH3DistanceParams) ([]GetAllMerchantsWithItemsSortedByH3DistanceRow, error) {
-	rows, err := q.db.Query(ctx, getAllMerchantsWithItemsSortedByH3Distance, arg.Point, arg.Point_2)
+	rows, err := q.db.Query(ctx, getAllMerchantsWithItemsSortedByH3Distance, arg.Point, arg.Point_2, arg.Column3)
 	if err != nil {
 		return nil, err
 	}

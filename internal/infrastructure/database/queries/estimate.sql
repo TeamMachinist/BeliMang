@@ -76,4 +76,5 @@ SELECT
     ) AS h3_distance
 FROM merchants m
 JOIN items i ON m.id = i.merchant_id
+WHERE ($3 = '' OR m.name ILIKE '%' || $3 || '%')
 ORDER BY h3_distance ASC, m.created_at DESC, i.created_at ASC; 

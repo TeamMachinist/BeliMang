@@ -257,8 +257,8 @@ func (s *PurchaseService) CreateOrderByEstimateId(ctx context.Context, estimateI
 		OrderId: order.ID.String(),
 	}, nil
 }
-func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, lat, lng float64) (GetMerchantsNearbyResponse, error) {
-	rows, err := s.queries.GetAllMerchantsWithItemsSortedByH3Distance(ctx, database.GetAllMerchantsWithItemsSortedByH3DistanceParams{Point: lat, Point_2: lng})
+func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, lat float64, lng float64, name string) (GetMerchantsNearbyResponse, error) {
+	rows, err := s.queries.GetAllMerchantsWithItemsSortedByH3Distance(ctx, database.GetAllMerchantsWithItemsSortedByH3DistanceParams{Point: lat, Point_2: lng, Column3: name})
 	if err != nil {
 		return GetMerchantsNearbyResponse{}, fmt.Errorf("failed to fetch merchants with items: %w", err)
 	}
@@ -284,16 +284,16 @@ func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, lat, lng float
 			}
 		}
 
-		// if row.ItemID.Valid {
-		// 	merchantMap[merchantID].Items = append(merchantMap[merchantID].Items, ItemInfo{
-		// 		ItemID:          row.ItemID.UUID.String(),
-		// 		Name:            row.ItemName,
-		// 		ProductCategory: row.ProductCategory,
-		// 		Price:           row.Price,
-		// 		ImageUrl:        row.ItemImageUrl,
-		// 		CreatedAt:       row.ItemCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
-		// 	})
-		// }
+		if row.ItemID != uuid.Nil {
+			merchantMap[merchantID].Items = append(merchantMap[merchantID].Items, ItemInfo{
+				ItemID:          row.ItemID.String(),
+				Name:            row.ItemName,
+				ProductCategory: row.ProductCategory,
+				Price:           row.Price,
+				ImageUrl:        row.ItemImageUrl,
+				CreatedAt:       row.ItemCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
+			})
+		}
 	}
 
 	var data []MerchantWithItemsResponse

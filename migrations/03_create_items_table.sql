@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS btree_gin;  -- ADD THIS LINE
 
 CREATE TABLE IF NOT EXISTS items (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
@@ -9,6 +10,7 @@ CREATE TABLE IF NOT EXISTS items (
     image_url TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
 
 -- 1. PRIMARY INDEX: merchant_id (base filter - always used)
 CREATE INDEX IF NOT EXISTS idx_items_merchant_id 
@@ -42,6 +44,6 @@ CREATE INDEX IF NOT EXISTS idx_items_id_merchant_covering
 ON items(id, merchant_id) INCLUDE (name, product_category, price, image_url, created_at);
 
 -- 5. PARTIAL INDEX for active/recent items
-CREATE INDEX IF NOT EXISTS idx_items_merchant_recent
-ON items(merchant_id, created_at DESC)
-WHERE created_at > NOW() - INTERVAL '30 days';
+-- CREATE INDEX IF NOT EXISTS idx_items_merchant_recent
+-- ON items(merchant_id, created_at DESC)
+-- WHERE created_at > NOW() - INTERVAL '30 days';
