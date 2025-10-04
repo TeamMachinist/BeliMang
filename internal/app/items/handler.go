@@ -3,6 +3,7 @@ package items
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -27,8 +28,80 @@ func (h *ItemHandler) CreateItem(c *gin.Context) {
 		return
 	}
 
+	var rawData map[string]interface{}
+	if err := c.ShouldBindJSON(&rawData); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON format"})
+		return
+	}
+
+	if price, exists := rawData["price"]; exists {
+		switch price.(type) {
+		case float64, int, int64:
+		case nil:
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON format"})
+			return
+		}
+	}
+
+	if name, exists := rawData["name"]; exists && name != nil {
+		if _, ok := name.(string); !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON format"})
+			return
+		}
+	}
+
+	if productCategory, exists := rawData["productCategory"]; exists && productCategory != nil {
+		if _, ok := productCategory.(string); !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON format"})
+			return
+		}
+	}
+
+	if imageUrl, exists := rawData["imageUrl"]; exists && imageUrl != nil {
+		if _, ok := imageUrl.(string); !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON format"})
+			return
+		}
+	}
+
 	var req CreateItemRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if name, exists := rawData["name"]; exists && name != nil {
+		if nameStr, ok := name.(string); ok {
+			req.Name = nameStr
+		}
+	}
+	if productCategory, exists := rawData["productCategory"]; exists && productCategory != nil {
+		if catStr, ok := productCategory.(string); ok {
+			req.ProductCategory = catStr
+		}
+	}
+	if imageUrl, exists := rawData["imageUrl"]; exists && imageUrl != nil {
+		if urlStr, ok := imageUrl.(string); ok {
+			req.ImageUrl = urlStr
+		}
+	}
+	if price, exists := rawData["price"]; exists && price != nil {
+		switch p := price.(type) {
+		case float64:
+			req.Price = int64(p)
+		case int:
+			req.Price = int64(p)
+		case int64:
+			req.Price = p
+		}
+	}
+
+	if req.ImageUrl != "" {
+		if !isValidImageURL(req.ImageUrl) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": []string{"ImageUrl must be a valid URL"},
+			})
+			return
+		}
+	}
+
+	if err := validator.New().Struct(&req); err != nil {
 		if validationErrors, ok := err.(validator.ValidationErrors); ok {
 			var errorMessages []string
 			for _, e := range validationErrors {
@@ -60,7 +133,7 @@ func (h *ItemHandler) CreateItem(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON format"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "validation failed"})
 		return
 	}
 
@@ -160,6 +233,31 @@ func (h *ItemHandler) GetItems(c *gin.Context) {
 	resp.Meta.Total = total
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func isValidImageURL(urlStr string) bool {
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		return false
+	}
+
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return false
+	}
+
+	if parsedURL.Host == "" {
+		return false
+	}
+
+	if !strings.Contains(parsedURL.Host, ".") {
+		return false
+	}
+
+	if parsedURL.Host == "." || strings.HasPrefix(parsedURL.Host, ".") || strings.HasSuffix(parsedURL.Host, ".") {
+		return false
+	}
+
+	return true
 }
 
 func (h *ItemHandler) respondEmpty(c *gin.Context, limit, offset int32, total int64) {

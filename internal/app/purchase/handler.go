@@ -4,19 +4,20 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 )
 
 type PurchaseHandler struct {
 	purchaseService *PurchaseService
+	validate        *validator.Validate
 }
 
-func NewPurchaseHandler(pS *PurchaseService) *PurchaseHandler {
-	return &PurchaseHandler{purchaseService: pS}
+func NewPurchaseHandler(pS *PurchaseService, v *validator.Validate) *PurchaseHandler {
+	return &PurchaseHandler{purchaseService: pS, validate: v}
 }
 
 func (h *PurchaseHandler) Estimate(c *gin.Context) {
-	// Extract user_id from Gin context
 	userIDInterface, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
@@ -29,7 +30,6 @@ func (h *PurchaseHandler) Estimate(c *gin.Context) {
 		return
 	}
 
-	// Convert user_id string to UUID format
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user ID format"})
@@ -39,6 +39,11 @@ func (h *PurchaseHandler) Estimate(c *gin.Context) {
 	var req EstimateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON"})
+		return
+	}
+
+	if err := h.validate.Struct(req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 		return
 	}
 
@@ -63,7 +68,6 @@ func (h *PurchaseHandler) Estimate(c *gin.Context) {
 }
 
 func (h *PurchaseHandler) CreateOrder(c *gin.Context) {
-	// Extract user_id from Gin context
 	userIDInterface, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
@@ -76,7 +80,6 @@ func (h *PurchaseHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
-	// Convert user_id string to UUID format
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user ID format"})
@@ -89,7 +92,6 @@ func (h *PurchaseHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
-	// Parse the estimate ID from the request
 	estimateID, err := uuid.Parse(req.CalculatedEstimateId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid estimate ID"})
@@ -107,5 +109,5 @@ func (h *PurchaseHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
+	c.JSON(http.StatusCreated, resp)
 }

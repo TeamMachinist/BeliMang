@@ -8,7 +8,7 @@ import (
 )
 
 func ItemRoutes(router *gin.Engine, handler *ItemHandler, jwt *jwt.JWTService) {
-	items := router.Group("/merchant")
+	items := router.Group("/admin/merchants")
 	items.Use(middleware.RequireAdmin(jwt))
 	{
 		items.POST("/:merchantId/items", handler.CreateItem)

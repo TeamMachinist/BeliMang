@@ -70,7 +70,7 @@ func main() {
 
 	// Purchase
 	purhcaseService := purchase.NewPurchaseService(db.Queries, db)
-	purchaseHandler := purchase.NewPurchaseHandler(purhcaseService)
+	purchaseHandler := purchase.NewPurchaseHandler(purhcaseService, validator)
 	purchase.PurchaseRoutes(router, purchaseHandler, jwtService)
 
 	// Initialize merchant components with shared dependencies

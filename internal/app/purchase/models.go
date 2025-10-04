@@ -6,14 +6,14 @@ type UserLocation struct {
 }
 
 type OrderItem struct {
-	ItemID   string `json:"itemId" validate:"required,uuid"`
+	ItemID   string `json:"itemId" validate:"required"`
 	Quantity int    `json:"quantity" validate:"required,min=1"`
 }
 
 type Order struct {
-	MerchantID      string      `json:"merchantId" validate:"required,uuid"`
-	IsStartingPoint bool        `json:"isStartingPoint" validate:"required"`
-	Items           []OrderItem `json:"items" validate:"required,min=1,dive"`
+	MerchantID      string      `json:"merchantId" validate:"required"`
+	IsStartingPoint bool        `json:"isStartingPoint"`
+	Items           []OrderItem `json:"items" validate:"dive"`
 }
 
 type EstimateRequest struct {
@@ -28,7 +28,7 @@ type EstimateResponse struct {
 }
 
 type CreateOrderRequest struct {
-	CalculatedEstimateId string `json:"calculatedEstimateId" validate:"required,uuid"`
+	CalculatedEstimateId string `json:"calculatedEstimateId" validate:"required"`
 }
 
 type CreateOrderResponse struct {
