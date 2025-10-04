@@ -1,7 +1,6 @@
 package database
 
 import (
-	"belimang/internal/config"
 	"context"
 	_ "embed"
 	"fmt"
@@ -15,12 +14,12 @@ type DB struct {
 	Pool    *pgxpool.Pool
 }
 
-func NewDatabase(ctx context.Context, cfg *config.DatabaseConfig) (*DB, error) {
+func NewDatabase(ctx context.Context, cfg string) (*DB, error) {
 	// Create connection string using config
-	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-		cfg.Host, cfg.Port, cfg.Username, cfg.Password, cfg.Database, cfg.SSLMode)
+	// connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+	// 	cfg.Host, cfg.Port, cfg.Username, cfg.Password, cfg.Database, cfg.SSLMode)
 
-	config, err := pgxpool.ParseConfig(connStr)
+	config, err := pgxpool.ParseConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse database URL: %w", err)
 	}
@@ -33,7 +32,7 @@ func NewDatabase(ctx context.Context, cfg *config.DatabaseConfig) (*DB, error) {
 	config.HealthCheckPeriod = 1 * time.Minute // Regular health checks
 
 	// Connection timeout
-	config.ConnConfig.ConnectTimeout = 10 * time.Second
+	config.ConnConfig.ConnectTimeout = 1 * time.Second
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {

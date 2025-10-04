@@ -8,6 +8,8 @@ import (
 
 	"belimang/internal/app/image"
 	"belimang/internal/app/items"
+	"belimang/internal/app/merchant"
+	"belimang/internal/app/purchase"
 	"belimang/internal/app/user"
 	"belimang/internal/config"
 	"belimang/internal/infrastructure/cache"
@@ -33,7 +35,7 @@ func main() {
 	logger.Init()
 
 	// Initialize database
-	db, err := database.NewDatabase(ctx, &cfg.Database)
+	db, err := database.NewDatabase(ctx, cfg.Database.DbUrl)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
@@ -62,9 +64,19 @@ func main() {
 	user.RegisterRoutes(router, userHandler)
 
 	// Item
-	itemService := items.NewItemService(db.Queries)
+	itemService := items.NewItemService(db.Queries, redisCache)
 	itemHandler := items.NewItemHandler(itemService)
-	items.ItemRoutes(router.Group("/api/v1"), itemHandler)
+	items.ItemRoutes(router, itemHandler, jwtService)
+
+	// Purchase
+	purhcaseService := purchase.NewPurchaseService(db.Queries, db)
+	purchaseHandler := purchase.NewPurchaseHandler(purhcaseService)
+	purchase.PurchaseRoutes(router, purchaseHandler, jwtService)
+
+	// Initialize merchant components with shared dependencies
+	merchantService := merchant.NewMerchantService(redisCache, db.Queries)
+	merchantHandler := merchant.NewMerchantHandler(merchantService, validator)
+	merchant.MerchantRoutes(router, merchantHandler, jwtService)
 
 	// Image
 	imageHandler := image.NewImageHandler()

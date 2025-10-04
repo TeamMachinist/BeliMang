@@ -54,6 +54,32 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 	return string(ns.UserRole), nil
 }
 
+type EstimateOrderItems struct {
+	ID              uuid.UUID `json:"id"`
+	EstimateOrderID uuid.UUID `json:"estimate_order_id"`
+	ItemID          uuid.UUID `json:"item_id"`
+	Quantity        int       `json:"quantity"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type EstimateOrders struct {
+	ID              uuid.UUID `json:"id"`
+	EstimateID      uuid.UUID `json:"estimate_id"`
+	MerchantID      uuid.UUID `json:"merchant_id"`
+	IsStartingPoint bool      `json:"is_starting_point"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type Estimates struct {
+	ID                             uuid.UUID `json:"id"`
+	UserID                         uuid.UUID `json:"user_id"`
+	UserLat                        float64   `json:"user_lat"`
+	UserLng                        float64   `json:"user_lng"`
+	TotalPrice                     int64     `json:"total_price"`
+	EstimatedDeliveryTimeInMinutes int       `json:"estimated_delivery_time_in_minutes"`
+	CreatedAt                      time.Time `json:"created_at"`
+}
+
 type Items struct {
 	ID              uuid.UUID `json:"id"`
 	MerchantID      uuid.UUID `json:"merchant_id"`
@@ -72,8 +98,33 @@ type Merchants struct {
 	ImageUrl         string      `json:"image_url"`
 	Lat              float64     `json:"lat"`
 	Lng              float64     `json:"lng"`
-	Location         interface{} `json:"location"`
+	H3Index          interface{} `json:"h3_index"`
 	CreatedAt        time.Time   `json:"created_at"`
+}
+
+type OrderItems struct {
+	ID              uuid.UUID `json:"id"`
+	OrderMerchantID uuid.UUID `json:"order_merchant_id"`
+	ItemID          uuid.UUID `json:"item_id"`
+	Quantity        int       `json:"quantity"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type OrderMerchants struct {
+	ID              uuid.UUID `json:"id"`
+	OrderID         uuid.UUID `json:"order_id"`
+	MerchantID      uuid.UUID `json:"merchant_id"`
+	IsStartingPoint bool      `json:"is_starting_point"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+type Orders struct {
+	ID                             uuid.UUID `json:"id"`
+	UserID                         uuid.UUID `json:"user_id"`
+	EstimateID                     uuid.UUID `json:"estimate_id"`
+	TotalPrice                     int64     `json:"total_price"`
+	EstimatedDeliveryTimeInMinutes int       `json:"estimated_delivery_time_in_minutes"`
+	CreatedAt                      time.Time `json:"created_at"`
 }
 
 type Users struct {
