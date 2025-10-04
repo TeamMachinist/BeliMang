@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS merchants (
     image_url TEXT NOT NULL,
     lat FLOAT8 NOT NULL CHECK (lat BETWEEN -90 AND 90),
     lng FLOAT8 NOT NULL CHECK (lng BETWEEN -180 AND 180),
-    h3_index H3INDEX GENERATED ALWAYS AS (h3_lat_lng_to_cell(Point(lat,lng), 10)) STORED,
+    h3_index H3INDEX GENERATED ALWAYS AS (h3_latlng_to_cell(Point(lat,lng), 10)) STORED,
     -- location GEOGRAPHY(POINT, 4326) GENERATED ALWAYS AS (ST_Point(lng, lat)) STORED,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

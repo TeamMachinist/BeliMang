@@ -24,6 +24,7 @@ type Querier interface {
 	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) error
 	CreateOrderMerchant(ctx context.Context, arg CreateOrderMerchantParams) (uuid.UUID, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (Users, error)
+	GetAllMerchantsWithItemsSortedByH3Distance(ctx context.Context, arg GetAllMerchantsWithItemsSortedByH3DistanceParams) ([]GetAllMerchantsWithItemsSortedByH3DistanceRow, error)
 	GetEstimateById(ctx context.Context, dollar_1 uuid.UUID) (Estimates, error)
 	GetEstimateOrderDetails(ctx context.Context, dollar_1 uuid.UUID) ([]GetEstimateOrderDetailsRow, error)
 	GetEstimateOrderIds(ctx context.Context, estimateID uuid.UUID) ([]GetEstimateOrderIdsRow, error)
