@@ -1,9 +1,9 @@
 -- name: CreateOrderFromEstimate :one
 INSERT INTO orders (
-    estimate_id, total_price, estimated_delivery_time_in_minutes
+    user_id, estimate_id, total_price, estimated_delivery_time_in_minutes
 ) 
 SELECT 
-    id, total_price, estimated_delivery_time_in_minutes
+    user_id, id, total_price, estimated_delivery_time_in_minutes
 FROM estimates
 WHERE id = $1::uuid
 RETURNING id, total_price, estimated_delivery_time_in_minutes;

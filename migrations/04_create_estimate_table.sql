@@ -1,5 +1,6 @@
 CREATE TABLE estimates (
     id UUID PRIMARY KEY DEFAULT uuidv7(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     user_lat FLOAT8 NOT NULL,
     user_lng FLOAT8 NOT NULL,
     total_price BIGINT NOT NULL,

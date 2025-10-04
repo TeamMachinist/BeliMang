@@ -52,7 +52,7 @@ type merchantPoint struct {
 	Order      Order
 }
 
-func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateRequest) (EstimateResponse, error) {
+func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, userID uuid.UUID, req EstimateRequest) (EstimateResponse, error) {
 	if len(req.Orders) == 0 {
 		return EstimateResponse{}, errors.New("orders cannot be empty")
 	}
@@ -224,6 +224,7 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 
 	repository := NewPurchaseRepository(s.db)
 	estimate, err := repository.CreateEstimateWithOrders(ctx,
+		userID,
 		req.UserLocation.Lat,
 		req.UserLocation.Long,
 		float64(totalPrice),
@@ -240,7 +241,7 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, req EstimateR
 	}, nil
 }
 
-func (s *PurchaseService) CreateOrderByEstimateId(ctx context.Context, estimateID uuid.UUID) (CreateOrderResponse, error) {
+func (s *PurchaseService) CreateOrderByEstimateId(ctx context.Context, userID uuid.UUID, estimateID uuid.UUID) (CreateOrderResponse, error) {
 	repository := NewPurchaseRepository(s.db)
 
 	_, err := repository.GetEstimateById(ctx, estimateID)
@@ -248,7 +249,7 @@ func (s *PurchaseService) CreateOrderByEstimateId(ctx context.Context, estimateI
 		return CreateOrderResponse{}, errors.New("estimate not found")
 	}
 
-	order, err := repository.CreateOrderFromEstimate(ctx, estimateID)
+	order, err := repository.CreateOrderFromEstimate(ctx, userID, estimateID)
 	if err != nil {
 		return CreateOrderResponse{}, fmt.Errorf("failed to create order from estimate: %w", err)
 	}

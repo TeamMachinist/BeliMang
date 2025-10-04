@@ -72,6 +72,7 @@ type EstimateOrders struct {
 
 type Estimates struct {
 	ID                             uuid.UUID `json:"id"`
+	UserID                         uuid.UUID `json:"user_id"`
 	UserLat                        float64   `json:"user_lat"`
 	UserLng                        float64   `json:"user_lng"`
 	TotalPrice                     int64     `json:"total_price"`
@@ -119,6 +120,7 @@ type OrderMerchants struct {
 
 type Orders struct {
 	ID                             uuid.UUID `json:"id"`
+	UserID                         uuid.UUID `json:"user_id"`
 	EstimateID                     uuid.UUID `json:"estimate_id"`
 	TotalPrice                     int64     `json:"total_price"`
 	EstimatedDeliveryTimeInMinutes int       `json:"estimated_delivery_time_in_minutes"`

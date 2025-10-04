@@ -16,6 +16,25 @@ func NewPurchaseHandler(pS *PurchaseService) *PurchaseHandler {
 }
 
 func (h *PurchaseHandler) Estimate(c *gin.Context) {
+	// Extract user_id from Gin context
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+
+	userID, ok := userIDInterface.(string)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+		return
+	}
+
+	// Convert user_id string to UUID format
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user ID format"})
+		return
+	}
 
 	var req EstimateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -23,7 +42,7 @@ func (h *PurchaseHandler) Estimate(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.purchaseService.ValidateAndEstimate(c, req)
+	resp, err := h.purchaseService.ValidateAndEstimate(c, userUUID, req)
 	if err != nil {
 		switch err.Error() {
 		case "merchant not found", "item not found":
@@ -44,6 +63,26 @@ func (h *PurchaseHandler) Estimate(c *gin.Context) {
 }
 
 func (h *PurchaseHandler) CreateOrder(c *gin.Context) {
+	// Extract user_id from Gin context
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not authenticated"})
+		return
+	}
+
+	userID, ok := userIDInterface.(string)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user context"})
+		return
+	}
+
+	// Convert user_id string to UUID format
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user ID format"})
+		return
+	}
+
 	var req CreateOrderRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON"})
@@ -57,7 +96,7 @@ func (h *PurchaseHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.purchaseService.CreateOrderByEstimateId(c, estimateID)
+	resp, err := h.purchaseService.CreateOrderByEstimateId(c, userUUID, estimateID)
 	if err != nil {
 		switch err.Error() {
 		case "estimate not found":
