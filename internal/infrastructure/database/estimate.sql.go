@@ -13,18 +13,19 @@ import (
 
 const createEstimate = `-- name: CreateEstimate :one
 INSERT INTO estimates (
-    user_lat, user_lng, total_price, estimated_delivery_time_in_minutes
+    user_id, user_lat, user_lng, total_price, estimated_delivery_time_in_minutes
 ) VALUES (
-    $1, $2, $3, $4
+    $1, $2, $3, $4, $5
 )
 RETURNING id, total_price, estimated_delivery_time_in_minutes
 `
 
 type CreateEstimateParams struct {
-	UserLat                        float64 `json:"user_lat"`
-	UserLng                        float64 `json:"user_lng"`
-	TotalPrice                     int64   `json:"total_price"`
-	EstimatedDeliveryTimeInMinutes int     `json:"estimated_delivery_time_in_minutes"`
+	UserID                         uuid.UUID `json:"user_id"`
+	UserLat                        float64   `json:"user_lat"`
+	UserLng                        float64   `json:"user_lng"`
+	TotalPrice                     int64     `json:"total_price"`
+	EstimatedDeliveryTimeInMinutes int       `json:"estimated_delivery_time_in_minutes"`
 }
 
 type CreateEstimateRow struct {
@@ -35,6 +36,7 @@ type CreateEstimateRow struct {
 
 func (q *Queries) CreateEstimate(ctx context.Context, arg CreateEstimateParams) (CreateEstimateRow, error) {
 	row := q.db.QueryRow(ctx, createEstimate,
+		arg.UserID,
 		arg.UserLat,
 		arg.UserLng,
 		arg.TotalPrice,
@@ -84,7 +86,7 @@ func (q *Queries) CreateEstimateOrderItem(ctx context.Context, arg CreateEstimat
 }
 
 const getEstimateById = `-- name: GetEstimateById :one
-SELECT id, user_lat, user_lng, total_price, estimated_delivery_time_in_minutes, created_at
+SELECT id, user_id, user_lat, user_lng, total_price, estimated_delivery_time_in_minutes, created_at
 FROM estimates
 WHERE id = $1::uuid
 `
@@ -94,6 +96,7 @@ func (q *Queries) GetEstimateById(ctx context.Context, dollar_1 uuid.UUID) (Esti
 	var i Estimates
 	err := row.Scan(
 		&i.ID,
+		&i.UserID,
 		&i.UserLat,
 		&i.UserLng,
 		&i.TotalPrice,

@@ -28,10 +28,9 @@ type OrderResult struct {
 	EstimatedDeliveryTimeInMinutes int32
 }
 
-func (r *PurchaseRepository) CreateEstimateWithOrders(ctx context.Context, userLat, userLng, totalPrice float64, estimatedTime int, orders []Order) (EstimateResult, error) {
+func (r *PurchaseRepository) CreateEstimateWithOrders(ctx context.Context, userID uuid.UUID, userLat, userLng, totalPrice float64, estimatedTime int, orders []Order) (EstimateResult, error) {
 	var result EstimateResult
 
-	// Use transaction for performance and consistency
 	tx, err := r.db.Pool.Begin(ctx)
 	if err != nil {
 		return result, fmt.Errorf("failed to begin transaction: %w", err)
@@ -40,8 +39,8 @@ func (r *PurchaseRepository) CreateEstimateWithOrders(ctx context.Context, userL
 
 	txQueries := r.db.Queries.WithTx(tx)
 
-	// Create the estimate
 	estimate, err := txQueries.CreateEstimate(ctx, database.CreateEstimateParams{
+		UserID:                         userID,
 		UserLat:                        userLat,
 		UserLng:                        userLng,
 		TotalPrice:                     int64(totalPrice),
@@ -74,7 +73,6 @@ func (r *PurchaseRepository) CreateEstimateWithOrders(ctx context.Context, userL
 		return result, fmt.Errorf("failed to get estimate orders: %w", err)
 	}
 
-	// Create a mapping from merchant_id to estimate_order_id for quick lookup
 	orderIdMap := make(map[uuid.UUID]uuid.UUID)
 	for _, eo := range estimateOrders {
 		orderIdMap[eo.MerchantID] = eo.ID
@@ -122,7 +120,10 @@ func (r *PurchaseRepository) CreateEstimateWithOrders(ctx context.Context, userL
 	return result, nil
 }
 
-func (r *PurchaseRepository) CreateOrderFromEstimate(ctx context.Context, estimateID uuid.UUID) (OrderResult, error) {
+// CreateOrderFromEstimate creates an order from an existing estimate for the specified user.
+// It accepts a userID parameter to ensure the estimate belongs to the authenticated user,
+// providing additional security and data validation.
+func (r *PurchaseRepository) CreateOrderFromEstimate(ctx context.Context, userID uuid.UUID, estimateID uuid.UUID) (OrderResult, error) {
 	var result OrderResult
 
 	// Use transaction for performance and consistency
@@ -134,11 +135,16 @@ func (r *PurchaseRepository) CreateOrderFromEstimate(ctx context.Context, estima
 
 	txQueries := r.db.Queries.WithTx(tx)
 
-	// First check if estimate exists
-	_, err = txQueries.GetEstimateById(ctx, estimateID)
+	// First check if estimate exists and belongs to the user
+	estimate, err := txQueries.GetEstimateById(ctx, estimateID)
 	if err != nil {
 		// This will handle both not found and other database errors
 		return result, fmt.Errorf("estimate not found: %w", err)
+	}
+
+	// Validate that the estimate belongs to the authenticated user
+	if estimate.UserID != userID {
+		return result, fmt.Errorf("estimate does not belong to the authenticated user")
 	}
 
 	// Create the order from the estimate
