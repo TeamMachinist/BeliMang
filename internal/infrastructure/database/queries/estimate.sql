@@ -55,7 +55,33 @@ FROM estimate_orders
 WHERE estimate_id = @estimate_id
 ORDER BY id;
 
--- name: GetAllMerchantsWithItemsSortedByH3Distance :many
+-- name: GetNearestMerchant :many
+WITH user_location AS (
+    SELECT ST_SetSRID(ST_Point(@user_lng, @user_lat), 4326)::GEOGRAPHY AS point
+),
+filtered_merchants AS (
+    SELECT DISTINCT m.id, ST_Distance(m.location, ul.point) AS distance_meters
+    FROM merchants m
+    CROSS JOIN user_location ul
+    LEFT JOIN items i ON m.id = i.merchant_id
+    WHERE
+        (@merchant_id::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR m.id = @merchant_id)
+        AND (
+            @search_name::text = ''
+            OR m.name ILIKE '%' || @search_name || '%'
+            OR EXISTS (
+                SELECT 1 FROM items i2 
+                WHERE i2.merchant_id = m.id 
+                AND i2.name ILIKE '%' || @search_name || '%'
+            )
+        )
+        AND (
+            @merchant_category::text = ''
+            OR m.merchant_category = @merchant_category
+        )
+    ORDER BY distance_meters ASC, m.id ASC
+    LIMIT @limit_rows OFFSET @offset_rows
+)
 SELECT
     m.id AS merchant_id,
     m.name AS merchant_name,
@@ -64,17 +90,34 @@ SELECT
     m.lat,
     m.lng,
     m.created_at AS merchant_created_at,
-    i.id AS item_id,
-    i.name AS item_name,
-    i.product_category,
-    i.price,
-    i.image_url AS item_image_url,
-    i.created_at AS item_created_at,
-    h3_grid_distance(
-        h3_latlng_to_cell(Point($1, $2), 10),
-        m.h3_index
-    ) AS h3_distance
+    COALESCE(i.id, '00000000-0000-0000-0000-000000000000'::uuid) AS item_id,
+    COALESCE(i.name, '') AS item_name,
+    COALESCE(i.product_category, '') AS product_category,
+    COALESCE(i.price, 0) AS price,
+    COALESCE(i.image_url, '') AS item_image_url,
+    COALESCE(i.created_at, '1970-01-01 00:00:00'::timestamp) AS item_created_at,
+    fm.distance_meters
+FROM filtered_merchants fm
+JOIN merchants m ON fm.id = m.id
+LEFT JOIN items i ON m.id = i.merchant_id
+ORDER BY fm.distance_meters ASC, m.id ASC, i.created_at ASC NULLS LAST, i.id ASC;
+
+-- name: CountNearestMerchants :one
+SELECT COUNT(DISTINCT m.id)
 FROM merchants m
-JOIN items i ON m.id = i.merchant_id
-WHERE ($3 = '' OR m.name ILIKE '%' || $3 || '%')
-ORDER BY h3_distance ASC, m.created_at DESC, i.created_at ASC; 
+LEFT JOIN items i ON m.id = i.merchant_id
+WHERE
+    (@merchant_id::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR m.id = @merchant_id)
+    AND (
+        @search_name::text = ''
+        OR m.name ILIKE '%' || @search_name || '%'
+        OR EXISTS (
+            SELECT 1 FROM items i2 
+            WHERE i2.merchant_id = m.id 
+            AND i2.name ILIKE '%' || @search_name || '%'
+        )
+    )
+    AND (
+        @merchant_category::text = ''
+        OR m.merchant_category = @merchant_category
+    );

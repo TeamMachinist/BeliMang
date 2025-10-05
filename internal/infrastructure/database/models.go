@@ -99,6 +99,7 @@ type Merchants struct {
 	Lat              float64     `json:"lat"`
 	Lng              float64     `json:"lng"`
 	H3Index          interface{} `json:"h3_index"`
+	Location         interface{} `json:"location"`
 	CreatedAt        time.Time   `json:"created_at"`
 }
 

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/uber/h3-go/v4"
@@ -280,13 +281,58 @@ func (s *PurchaseService) CreateOrderByEstimateId(ctx context.Context, userID uu
 		OrderId: order.ID.String(),
 	}, nil
 }
-func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, lat float64, lng float64, name string) (GetMerchantsNearbyResponse, error) {
-	rows, err := s.queries.GetAllMerchantsWithItemsSortedByH3Distance(ctx, database.GetAllMerchantsWithItemsSortedByH3DistanceParams{Point: lat, Point_2: lng, Column3: name})
-	if err != nil {
-		return GetMerchantsNearbyResponse{}, fmt.Errorf("failed to fetch merchants with items: %w", err)
+
+type GetMerchantsNearbyParams struct {
+	Lat              float64
+	Lng              float64
+	MerchantID       string
+	Name             string
+	MerchantCategory string
+	Limit            int
+	Offset           int
+}
+
+func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, params *GetMerchantsNearbyParams) (*GetMerchantsNearbyResponse, error) {
+	if params.Limit <= 0 {
+		params.Limit = 5
 	}
 
+	// Parse merchantID or use zero UUID
+	var merchantID uuid.UUID
+	if params.MerchantID != "" {
+		parsedUUID, err := uuid.Parse(params.MerchantID)
+		if err != nil {
+			return &GetMerchantsNearbyResponse{}, errors.New("invalid merchant_id")
+		}
+		merchantID = parsedUUID
+	} // else merchantID remains zero value (00000000-0000-0000-0000-000000000000)
+
+	rows, err := s.queries.GetNearestMerchant(ctx, database.GetNearestMerchantParams{
+		UserLat:          params.Lat,
+		UserLng:          params.Lng,
+		MerchantID:       merchantID,              // Zero UUID if not provided
+		SearchName:       params.Name,             // Empty string if not provided
+		MerchantCategory: params.MerchantCategory, // Empty string if not provided
+		LimitRows:        int32(params.Limit),
+		OffsetRows:       int32(params.Offset),
+	})
+	if err != nil {
+		return &GetMerchantsNearbyResponse{}, fmt.Errorf("failed to fetch merchants with items: %w", err)
+	}
+
+	totalMerchants, err := s.queries.CountNearestMerchants(ctx, database.CountNearestMerchantsParams{
+		MerchantID:       merchantID,
+		SearchName:       params.Name,
+		MerchantCategory: params.MerchantCategory,
+	})
+	if err != nil {
+		return &GetMerchantsNearbyResponse{}, fmt.Errorf("failed to count merchants: %w", err)
+	}
+
+	// Group by merchant while preserving order
 	merchantMap := make(map[string]*MerchantWithItemsResponse)
+	merchantOrder := []string{}
+
 	for _, row := range rows {
 		merchantID := row.MerchantID.String()
 
@@ -301,38 +347,39 @@ func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, lat float64, l
 						Lat:  row.Lat,
 						Long: row.Lng,
 					},
-					CreatedAt: row.MerchantCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
+					CreatedAt: row.MerchantCreatedAt.Format(time.RFC3339Nano),
 				},
 				Items: []ItemInfo{},
 			}
+			merchantOrder = append(merchantOrder, merchantID)
 		}
 
-		if row.ItemID != uuid.Nil {
+		// Only add item if it exists (not the default UUID we set in COALESCE)
+		defaultUUID := uuid.MustParse("00000000-0000-0000-0000-000000000000")
+		if row.ItemID != uuid.Nil && row.ItemID != defaultUUID {
 			merchantMap[merchantID].Items = append(merchantMap[merchantID].Items, ItemInfo{
 				ItemID:          row.ItemID.String(),
 				Name:            row.ItemName,
 				ProductCategory: row.ProductCategory,
 				Price:           row.Price,
 				ImageUrl:        row.ItemImageUrl,
-				CreatedAt:       row.ItemCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
+				CreatedAt:       row.ItemCreatedAt.Format(time.RFC3339Nano),
 			})
 		}
 	}
 
-	var data []MerchantWithItemsResponse
-	for _, m := range merchantMap {
-		data = append(data, *m)
+	// Build final data array maintaining order
+	data := make([]MerchantWithItemsResponse, 0, len(merchantOrder))
+	for _, merchantID := range merchantOrder {
+		data = append(data, *merchantMap[merchantID])
 	}
 
-	// TODO: Untuk production, pertimbangkan pagination di DB level (lebih kompleks karena grouping)
-	// Untuk sekarang, kita asumsikan jumlah merchant terbatas (<100)
-
-	return GetMerchantsNearbyResponse{
+	return &GetMerchantsNearbyResponse{
 		Data: data,
 		Meta: PaginationMeta{
-			Limit:  0, // bisa diisi jika ada pagination
-			Offset: 0,
-			Total:  len(data),
+			Limit:  params.Limit,
+			Offset: params.Offset,
+			Total:  int(totalMerchants),
 		},
 	}, nil
 }

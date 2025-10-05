@@ -12,6 +12,40 @@ import (
 	"github.com/google/uuid"
 )
 
+const countNearestMerchants = `-- name: CountNearestMerchants :one
+SELECT COUNT(DISTINCT m.id)
+FROM merchants m
+LEFT JOIN items i ON m.id = i.merchant_id
+WHERE
+    ($1::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR m.id = $1)
+    AND (
+        $2::text = ''
+        OR m.name ILIKE '%' || $2 || '%'
+        OR EXISTS (
+            SELECT 1 FROM items i2 
+            WHERE i2.merchant_id = m.id 
+            AND i2.name ILIKE '%' || $2 || '%'
+        )
+    )
+    AND (
+        $3::text = ''
+        OR m.merchant_category = $3
+    )
+`
+
+type CountNearestMerchantsParams struct {
+	MerchantID       uuid.UUID `json:"merchant_id"`
+	SearchName       string    `json:"search_name"`
+	MerchantCategory string    `json:"merchant_category"`
+}
+
+func (q *Queries) CountNearestMerchants(ctx context.Context, arg CountNearestMerchantsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countNearestMerchants, arg.MerchantID, arg.SearchName, arg.MerchantCategory)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createEstimate = `-- name: CreateEstimate :one
 INSERT INTO estimates (
     user_id, user_lat, user_lng, total_price, estimated_delivery_time_in_minutes
@@ -84,89 +118,6 @@ type CreateEstimateOrderItemParams struct {
 func (q *Queries) CreateEstimateOrderItem(ctx context.Context, arg CreateEstimateOrderItemParams) error {
 	_, err := q.db.Exec(ctx, createEstimateOrderItem, arg.EstimateOrderID, arg.ItemID, arg.Quantity)
 	return err
-}
-
-const getAllMerchantsWithItemsSortedByH3Distance = `-- name: GetAllMerchantsWithItemsSortedByH3Distance :many
-SELECT
-    m.id AS merchant_id,
-    m.name AS merchant_name,
-    m.merchant_category,
-    m.image_url AS merchant_image_url,
-    m.lat,
-    m.lng,
-    m.created_at AS merchant_created_at,
-    i.id AS item_id,
-    i.name AS item_name,
-    i.product_category,
-    i.price,
-    i.image_url AS item_image_url,
-    i.created_at AS item_created_at,
-    h3_grid_distance(
-        h3_latlng_to_cell(Point($1, $2), 10),
-        m.h3_index
-    ) AS h3_distance
-FROM merchants m
-JOIN items i ON m.id = i.merchant_id
-WHERE ($3 = '' OR m.name ILIKE '%' || $3 || '%')
-ORDER BY h3_distance ASC, m.created_at DESC, i.created_at ASC
-`
-
-type GetAllMerchantsWithItemsSortedByH3DistanceParams struct {
-	Point   float64     `json:"point"`
-	Point_2 float64     `json:"point_2"`
-	Column3 interface{} `json:"column_3"`
-}
-
-type GetAllMerchantsWithItemsSortedByH3DistanceRow struct {
-	MerchantID        uuid.UUID   `json:"merchant_id"`
-	MerchantName      string      `json:"merchant_name"`
-	MerchantCategory  string      `json:"merchant_category"`
-	MerchantImageUrl  string      `json:"merchant_image_url"`
-	Lat               float64     `json:"lat"`
-	Lng               float64     `json:"lng"`
-	MerchantCreatedAt time.Time   `json:"merchant_created_at"`
-	ItemID            uuid.UUID   `json:"item_id"`
-	ItemName          string      `json:"item_name"`
-	ProductCategory   string      `json:"product_category"`
-	Price             int64       `json:"price"`
-	ItemImageUrl      string      `json:"item_image_url"`
-	ItemCreatedAt     time.Time   `json:"item_created_at"`
-	H3Distance        interface{} `json:"h3_distance"`
-}
-
-func (q *Queries) GetAllMerchantsWithItemsSortedByH3Distance(ctx context.Context, arg GetAllMerchantsWithItemsSortedByH3DistanceParams) ([]GetAllMerchantsWithItemsSortedByH3DistanceRow, error) {
-	rows, err := q.db.Query(ctx, getAllMerchantsWithItemsSortedByH3Distance, arg.Point, arg.Point_2, arg.Column3)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []GetAllMerchantsWithItemsSortedByH3DistanceRow{}
-	for rows.Next() {
-		var i GetAllMerchantsWithItemsSortedByH3DistanceRow
-		if err := rows.Scan(
-			&i.MerchantID,
-			&i.MerchantName,
-			&i.MerchantCategory,
-			&i.MerchantImageUrl,
-			&i.Lat,
-			&i.Lng,
-			&i.MerchantCreatedAt,
-			&i.ItemID,
-			&i.ItemName,
-			&i.ProductCategory,
-			&i.Price,
-			&i.ItemImageUrl,
-			&i.ItemCreatedAt,
-			&i.H3Distance,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const getEstimateById = `-- name: GetEstimateById :one
@@ -322,6 +273,124 @@ func (q *Queries) GetMerchantsLatLong(ctx context.Context, merchantID []uuid.UUI
 	for rows.Next() {
 		var i GetMerchantsLatLongRow
 		if err := rows.Scan(&i.ID, &i.Lat, &i.Lng); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getNearestMerchant = `-- name: GetNearestMerchant :many
+WITH user_location AS (
+    SELECT ST_SetSRID(ST_Point($1, $2), 4326)::GEOGRAPHY AS point
+),
+filtered_merchants AS (
+    SELECT DISTINCT m.id, ST_Distance(m.location, ul.point) AS distance_meters
+    FROM merchants m
+    CROSS JOIN user_location ul
+    LEFT JOIN items i ON m.id = i.merchant_id
+    WHERE
+        ($3::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR m.id = $3)
+        AND (
+            $4::text = ''
+            OR m.name ILIKE '%' || $4 || '%'
+            OR EXISTS (
+                SELECT 1 FROM items i2 
+                WHERE i2.merchant_id = m.id 
+                AND i2.name ILIKE '%' || $4 || '%'
+            )
+        )
+        AND (
+            $5::text = ''
+            OR m.merchant_category = $5
+        )
+    ORDER BY distance_meters ASC, m.id ASC
+    LIMIT $7 OFFSET $6
+)
+SELECT
+    m.id AS merchant_id,
+    m.name AS merchant_name,
+    m.merchant_category,
+    m.image_url AS merchant_image_url,
+    m.lat,
+    m.lng,
+    m.created_at AS merchant_created_at,
+    COALESCE(i.id, '00000000-0000-0000-0000-000000000000'::uuid) AS item_id,
+    COALESCE(i.name, '') AS item_name,
+    COALESCE(i.product_category, '') AS product_category,
+    COALESCE(i.price, 0) AS price,
+    COALESCE(i.image_url, '') AS item_image_url,
+    COALESCE(i.created_at, '1970-01-01 00:00:00'::timestamp) AS item_created_at,
+    fm.distance_meters
+FROM filtered_merchants fm
+JOIN merchants m ON fm.id = m.id
+LEFT JOIN items i ON m.id = i.merchant_id
+ORDER BY fm.distance_meters ASC, m.id ASC, i.created_at ASC NULLS LAST, i.id ASC
+`
+
+type GetNearestMerchantParams struct {
+	UserLng          interface{} `json:"user_lng"`
+	UserLat          interface{} `json:"user_lat"`
+	MerchantID       uuid.UUID   `json:"merchant_id"`
+	SearchName       string      `json:"search_name"`
+	MerchantCategory string      `json:"merchant_category"`
+	OffsetRows       int32       `json:"offset_rows"`
+	LimitRows        int32       `json:"limit_rows"`
+}
+
+type GetNearestMerchantRow struct {
+	MerchantID        uuid.UUID   `json:"merchant_id"`
+	MerchantName      string      `json:"merchant_name"`
+	MerchantCategory  string      `json:"merchant_category"`
+	MerchantImageUrl  string      `json:"merchant_image_url"`
+	Lat               float64     `json:"lat"`
+	Lng               float64     `json:"lng"`
+	MerchantCreatedAt time.Time   `json:"merchant_created_at"`
+	ItemID            uuid.UUID   `json:"item_id"`
+	ItemName          string      `json:"item_name"`
+	ProductCategory   string      `json:"product_category"`
+	Price             int64       `json:"price"`
+	ItemImageUrl      string      `json:"item_image_url"`
+	ItemCreatedAt     time.Time   `json:"item_created_at"`
+	DistanceMeters    interface{} `json:"distance_meters"`
+}
+
+func (q *Queries) GetNearestMerchant(ctx context.Context, arg GetNearestMerchantParams) ([]GetNearestMerchantRow, error) {
+	rows, err := q.db.Query(ctx, getNearestMerchant,
+		arg.UserLng,
+		arg.UserLat,
+		arg.MerchantID,
+		arg.SearchName,
+		arg.MerchantCategory,
+		arg.OffsetRows,
+		arg.LimitRows,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetNearestMerchantRow{}
+	for rows.Next() {
+		var i GetNearestMerchantRow
+		if err := rows.Scan(
+			&i.MerchantID,
+			&i.MerchantName,
+			&i.MerchantCategory,
+			&i.MerchantImageUrl,
+			&i.Lat,
+			&i.Lng,
+			&i.MerchantCreatedAt,
+			&i.ItemID,
+			&i.ItemName,
+			&i.ProductCategory,
+			&i.Price,
+			&i.ItemImageUrl,
+			&i.ItemCreatedAt,
+			&i.DistanceMeters,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -14,6 +14,7 @@ type Querier interface {
 	CheckEmailExistsForRole(ctx context.Context, arg CheckEmailExistsForRoleParams) (bool, error)
 	CheckUsernameExists(ctx context.Context, username string) (bool, error)
 	CountItemsByMerchant(ctx context.Context, arg CountItemsByMerchantParams) (int64, error)
+	CountNearestMerchants(ctx context.Context, arg CountNearestMerchantsParams) (int64, error)
 	CountSearchMerchants(ctx context.Context, arg CountSearchMerchantsParams) (int64, error)
 	CreateEstimate(ctx context.Context, arg CreateEstimateParams) (CreateEstimateRow, error)
 	CreateEstimateOrder(ctx context.Context, arg CreateEstimateOrderParams) error
@@ -24,7 +25,6 @@ type Querier interface {
 	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) error
 	CreateOrderMerchant(ctx context.Context, arg CreateOrderMerchantParams) (uuid.UUID, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (Users, error)
-	GetAllMerchantsWithItemsSortedByH3Distance(ctx context.Context, arg GetAllMerchantsWithItemsSortedByH3DistanceParams) ([]GetAllMerchantsWithItemsSortedByH3DistanceRow, error)
 	GetEstimateById(ctx context.Context, dollar_1 uuid.UUID) (Estimates, error)
 	GetEstimateOrderDetails(ctx context.Context, dollar_1 uuid.UUID) ([]GetEstimateOrderDetailsRow, error)
 	GetEstimateOrderIds(ctx context.Context, estimateID uuid.UUID) ([]GetEstimateOrderIdsRow, error)
@@ -32,6 +32,7 @@ type Querier interface {
 	GetItemPricesByIDsAndMerchants(ctx context.Context, arg GetItemPricesByIDsAndMerchantsParams) ([]GetItemPricesByIDsAndMerchantsRow, error)
 	GetMerchantLatLong(ctx context.Context, merchantID uuid.UUID) (GetMerchantLatLongRow, error)
 	GetMerchantsLatLong(ctx context.Context, merchantID []uuid.UUID) ([]GetMerchantsLatLongRow, error)
+	GetNearestMerchant(ctx context.Context, arg GetNearestMerchantParams) ([]GetNearestMerchantRow, error)
 	GetOrderById(ctx context.Context, dollar_1 uuid.UUID) (GetOrderByIdRow, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error)
 	GetUserByUsernameAndRole(ctx context.Context, arg GetUserByUsernameAndRoleParams) (Users, error)

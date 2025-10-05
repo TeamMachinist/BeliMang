@@ -1,8 +1,6 @@
 package purchase
 
 import (
-	"context"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -117,46 +115,114 @@ func (h *PurchaseHandler) CreateOrder(c *gin.Context) {
 }
 
 func (h *PurchaseHandler) GetMerchantsNearbyHandler(c *gin.Context) {
+	// Parse coordinates
 	coords := c.Param("coords")
 	parts := strings.Split(coords, ",")
+
 	if len(parts) != 2 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid coordinates format. Use lat,lng"})
 		return
 	}
-	
-	lat, err := strconv.ParseFloat(parts[0], 64)
+
+	lat, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid latitude"})
 		return
 	}
 
-	lng, err := strconv.ParseFloat(parts[1], 64)
+	lng, err := strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid longitude"})
 		return
 	}
-	
-	// Validate ranges
-	if lat < -90 || lat > 90 || lng < -180 || lng > 180 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "latitude must be [-90,90], longitude [-180,180]"})
+
+	// // Validate lat/lng ranges
+	// if lat < -90 || lat > 90 {
+	// 	c.JSON(http.StatusBadRequest, gin.H{"error": "latitude must be between -90 and 90"})
+	// 	return
+	// }
+
+	// if lng < -180 || lng > 180 {
+	// 	c.JSON(http.StatusBadRequest, gin.H{"error": "longitude must be between -180 and 180"})
+	// 	return
+	// }
+
+	// Parse query parameters
+	merchantID := c.DefaultQuery("merchantId", "")
+	name := c.DefaultQuery("name", "")
+	merchantCategory := c.DefaultQuery("merchantCategory", "")
+
+	// Parse limit & offset
+	limitStr := c.DefaultQuery("limit", "5")
+	offsetStr := c.DefaultQuery("offset", "0")
+
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "limit must be a valid positive number"})
 		return
 	}
-	// Call service
-	ctx := context.Background() // or use c.Request.Context() if you have timeouts/tracing
-	
-    name := c.DefaultQuery("name", "")
-	fmt.Print("name is ", name)
-	response, err := h.purchaseService.GetMerchantsNearby(ctx, lat, lng, name)
-	if err != nil {
-		// Log the error internally
-		// logger.Error("Failed to get nearby merchants", "error", err)
 
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "failed to fetch nearby merchants",
+	offset, err := strconv.Atoi(offsetStr)
+	if err != nil || offset < 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "offset must be a valid positive number"})
+		return
+	}
+
+	// Validate merchantCategory enum (if provided)
+	validCategories := map[string]bool{
+		"SmallRestaurant":       true,
+		"MediumRestaurant":      true,
+		"LargeRestaurant":       true,
+		"MerchandiseRestaurant": true,
+		"BoothKiosk":            true,
+		"ConvenienceStore":      true,
+	}
+
+	if merchantCategory != "" && !validCategories[merchantCategory] {
+		// Return 200 with empty array for invalid category
+		c.JSON(http.StatusOK, GetMerchantsNearbyResponse{
+			Data: []MerchantWithItemsResponse{},
+			Meta: PaginationMeta{
+				Limit:  limit,
+				Offset: offset,
+				Total:  0,
+			},
 		})
 		return
 	}
 
-	// Return success response
+	// Validate merchantId format (if provided)
+	if merchantID != "" {
+		if _, err := uuid.Parse(merchantID); err != nil {
+			// Return 200 with empty array for invalid UUID
+			c.JSON(http.StatusOK, GetMerchantsNearbyResponse{
+				Data: []MerchantWithItemsResponse{},
+				Meta: PaginationMeta{
+					Limit:  limit,
+					Offset: offset,
+					Total:  0,
+				},
+			})
+			return
+		}
+	}
+
+	// Call service
+	ctx := c.Request.Context()
+	response, err := h.purchaseService.GetMerchantsNearby(ctx, &GetMerchantsNearbyParams{
+		Lat:              lat,
+		Lng:              lng,
+		MerchantID:       merchantID,
+		Name:             name,
+		MerchantCategory: merchantCategory,
+		Limit:            limit,
+		Offset:           offset,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Always return 200, even if empty
 	c.JSON(http.StatusOK, response)
 }

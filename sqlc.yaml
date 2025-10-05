@@ -26,3 +26,12 @@ sql:
             nullable: true
           - db_type: "pg_catalog.int4" # PostgreSQL 32-bit integer
             go_type: "int"
+          # - db_type: "h3index" # PostgreSQL 64-bit integer
+          #   go_type:
+          #     import: "github.com/uber/h3-go/v4"
+          #     type: "Cell"
+          - db_type: "h3index" # PostgreSQL 64-bit integer
+            go_type: "string"
+          - db_type: "text"
+            go_type: "string"
+            nullable: true

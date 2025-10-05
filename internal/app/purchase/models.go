@@ -41,6 +41,7 @@ type MerchantPoint struct {
 	IsStart    bool
 	Order      Order
 }
+
 // models :
 type MerchantWithItemsResponse struct {
 	Merchant MerchantInfo `json:"merchant"`
