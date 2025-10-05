@@ -37,7 +37,6 @@ SELECT id, estimate_id, total_price, estimated_delivery_time_in_minutes, created
 FROM orders
 WHERE id = $1::uuid;
 
-
 -- name: GetOrdersWithDetails :many
 SELECT 
     o.id AS order_id,

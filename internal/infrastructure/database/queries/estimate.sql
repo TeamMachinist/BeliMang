@@ -1,5 +1,6 @@
+
 -- name: GetMerchantLatLong :one
-SELECT id, lat, lng
+SELECT id, lat, lng, h3_index::h3index
 FROM merchants
 WHERE id = @merchant_id::uuid;
 
@@ -9,7 +10,7 @@ FROM items
 WHERE id = @item_id::uuid AND merchant_id = @merchant_id::uuid;
 
 -- name: GetMerchantsLatLong :many
-SELECT id, lat, lng
+SELECT id, lat, lng,h3_index::h3index
 FROM merchants
 WHERE id = ANY(@merchant_id::uuid[]);
 
@@ -90,34 +91,14 @@ SELECT
     m.lat,
     m.lng,
     m.created_at AS merchant_created_at,
-    COALESCE(i.id, '00000000-0000-0000-0000-000000000000'::uuid) AS item_id,
-    COALESCE(i.name, '') AS item_name,
-    COALESCE(i.product_category, '') AS product_category,
-    COALESCE(i.price, 0) AS price,
-    COALESCE(i.image_url, '') AS item_image_url,
-    COALESCE(i.created_at, '1970-01-01 00:00:00'::timestamp) AS item_created_at,
-    fm.distance_meters
-FROM filtered_merchants fm
-JOIN merchants m ON fm.id = m.id
-LEFT JOIN items i ON m.id = i.merchant_id
-ORDER BY fm.distance_meters ASC, m.id ASC, i.created_at ASC NULLS LAST, i.id ASC;
-
--- name: CountNearestMerchants :one
-SELECT COUNT(DISTINCT m.id)
+    i.id AS item_id,
+    i.name AS item_name,
+    i.product_category,
+    i.price,
+    i.image_url AS item_image_url,
+    i.created_at AS item_created_at,
+    CAST((POWER(m.lat - ($1), 2) + POWER(m.lng - $2, 2)) AS BIGINT) AS distance_squared 
 FROM merchants m
-LEFT JOIN items i ON m.id = i.merchant_id
-WHERE
-    (@merchant_id::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR m.id = @merchant_id)
-    AND (
-        @search_name::text = ''
-        OR m.name ILIKE '%' || @search_name || '%'
-        OR EXISTS (
-            SELECT 1 FROM items i2 
-            WHERE i2.merchant_id = m.id 
-            AND i2.name ILIKE '%' || @search_name || '%'
-        )
-    )
-    AND (
-        @merchant_category::text = ''
-        OR m.merchant_category = @merchant_category
-    );
+JOIN items i ON m.id = i.merchant_id
+WHERE ($3 = '' OR m.name ILIKE '%' || $3 || '%')
+ORDER BY distance_squared ASC, m.created_at DESC, i.created_at ASC; 

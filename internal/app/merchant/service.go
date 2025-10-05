@@ -60,11 +60,11 @@ func (s *MerchantService) CreateMerchantService(ctx context.Context, adminID uui
 func (s *MerchantService) SearchMerchantsService(ctx context.Context, filter MerchantFilter) (GetMerchantsResponse, error) {
 	logger.InfoCtx(ctx, "Create search merchants process", "merchantId", filter.MerchantID, "name", filter.Name, "category", filter.MerchantCategory, "sort", filter.CreatedAtSort)
 
-	var merchantId uuid.UUID
+	var merchantID uuid.UUID
 	if filter.MerchantID != "" {
 		id, err := uuid.Parse(filter.MerchantID)
 		if err == nil {
-			merchantId = id
+			merchantID = id
 		}
 	}
 
@@ -87,7 +87,7 @@ func (s *MerchantService) SearchMerchantsService(ctx context.Context, filter Mer
 		offset = 0
 	}
 
-	logger.DebugCtx(ctx, "Query search merchants", "merchantId", merchantId, "name", filter.Name, "category", merchantCategory, "sort", filter.CreatedAtSort)
+	logger.DebugCtx(ctx, "Query search merchants", "merchantId", merchantID, "name", filter.Name, "category", merchantCategory, "sort", filter.CreatedAtSort)
 
 	// Execute both queries in parallel for maximum performance
 	var (
@@ -105,7 +105,7 @@ func (s *MerchantService) SearchMerchantsService(ctx context.Context, filter Mer
 		defer wg.Done()
 		if filter.CreatedAtSort == "asc" {
 			rows, err := s.db.SearchMerchantsAsc(ctx, database.SearchMerchantsAscParams{
-				Column1: merchantId,
+				Column1: merchantID,
 				Column2: filter.Name,
 				Column3: filter.MerchantCategory,
 				Limit:   int32(limit),
@@ -133,7 +133,7 @@ func (s *MerchantService) SearchMerchantsService(ctx context.Context, filter Mer
 			}
 		} else {
 			rows, err := s.db.SearchMerchantsDesc(ctx, database.SearchMerchantsDescParams{
-				Column1: merchantId,
+				Column1: merchantID,
 				Column2: filter.Name,
 				Column3: filter.MerchantCategory,
 				Limit:   int32(limit),
@@ -166,7 +166,7 @@ func (s *MerchantService) SearchMerchantsService(ctx context.Context, filter Mer
 	go func() {
 		defer wg.Done()
 		total, errCount = s.db.CountSearchMerchants(ctx, database.CountSearchMerchantsParams{
-			Column1: merchantId,
+			Column1: merchantID,
 			Column2: filter.Name,
 			Column3: filter.MerchantCategory,
 		})

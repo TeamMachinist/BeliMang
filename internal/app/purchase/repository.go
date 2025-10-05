@@ -209,6 +209,26 @@ func (r *PurchaseRepository) CreateOrderFromEstimate(ctx context.Context, userID
 	return result, nil
 }
 
+func (r *PurchaseRepository) GetOrders(ctx context.Context, userID uuid.UUID, merchantID uuid.UUID, name string, merchantCategory string, limit int32, offset int32) ([]database.GetOrdersWithDetailsRow, error) {
+	rows, err := r.db.Queries.GetOrdersWithDetails(ctx, database.GetOrdersWithDetailsParams{
+		UserID:  userID,
+		Column2: merchantID,
+		Column3: name,
+		Column4: merchantCategory,
+		Limit:   limit,
+		Offset:  offset,
+	})
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			// No rows is not an error, return empty slice
+			return []database.GetOrdersWithDetailsRow{}, nil
+		}
+		logger.ErrorCtx(ctx, "Database query error", err)
+		return nil, fmt.Errorf("%w: %v", ErrDatabaseQuery, err)
+	}
+	return rows, nil
+}
+
 // Helper method to get an estimate by ID (for validation)
 func (r *PurchaseRepository) GetEstimateById(ctx context.Context, estimateID uuid.UUID) (database.Estimates, error) {
 	return r.db.Queries.GetEstimateById(ctx, estimateID)

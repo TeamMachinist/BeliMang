@@ -1,6 +1,8 @@
 package purchase
 
-import "errors"
+import (
+	"errors"
+)
 
 type UserLocation struct {
 	Lat  float64 `json:"lat" validate:"required,gte=-90,lte=90"`
@@ -68,19 +70,6 @@ type ItemInfo struct {
 	CreatedAt       string `json:"createdAt"` // ISO 8601 with nanoseconds
 }
 
-type Location struct {
-	Lat  float64 `json:"lat"`
-	Long float64 `json:"long"`
-}
-
-type OrderFilter struct {
-	MerchantID       string
-	Name             string
-	MerchantCategory string
-	Offset           int
-	Limit            int
-}
-
 type GetMerchantsNearbyResponse struct {
 	Data []MerchantWithItemsResponse `json:"data"`
 	Meta PaginationMeta              `json:"meta"`
@@ -90,6 +79,21 @@ type PaginationMeta struct {
 	Limit  int `json:"limit"`
 	Offset int `json:"offset"`
 	Total  int `json:"total"`
+}
+
+// OrderFilter holds filter params for get user orders
+type OrderFilter struct {
+	MerchantID       string
+	Name             string
+	MerchantCategory string
+	Offset           int
+	Limit            int
+}
+
+// Location represents geographical coordinates
+type Location struct {
+	Latitude  float64 `json:"lat"`
+	Longitude float64 `json:"long"`
 }
 
 // Merchant represents merchant information in the order
@@ -130,15 +134,15 @@ type GetOrdersResponse []OrderResponse
 
 // Domain errors
 var (
-	ErrOrderNotFound      = errors.New("order not found")
-	ErrInvalidMerchantID  = errors.New("invalid merchant id format")
-	ErrInvalidCategory    = errors.New("invalid merchant category")
-	ErrInvalidPagination  = errors.New("invalid pagination parameters")
-	ErrUnauthorizedAccess = errors.New("unauthorized to access this order")
-	ErrDatabaseQuery      = errors.New("database query failed")
-	ErrCacheOperation     = errors.New("cache operation failed")
-	ErrDataTransformation = errors.New("failed to transform data")
-	ErrInvalidUserID      = errors.New("invalid user id")
+	ErrOrderNotFound        = errors.New("order not found")
+	ErrInvalidMerchantID    = errors.New("invalid merchant id format")
+	ErrInvalidCategory      = errors.New("invalid merchant category")
+	ErrInvalidPagination    = errors.New("invalid pagination parameters")
+	ErrUnauthorizedAccess   = errors.New("unauthorized to access this order")
+	ErrDatabaseQuery        = errors.New("database query failed")
+	ErrCacheOperation       = errors.New("cache operation failed")
+	ErrDataTransformation   = errors.New("failed to transform data")
+	ErrInvalidUserID        = errors.New("invalid user id")
 )
 
 // ErrorResponse represents the structure for error responses
