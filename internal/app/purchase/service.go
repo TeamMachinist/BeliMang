@@ -153,16 +153,16 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, userID uuid.U
 			return EstimateResponse{}, errors.New("merchant not found")
 		}
 
-		h3Cell, err := utils.LatLonToH3(merchant.Lat, merchant.Lng)
-		if err != nil {
-			return EstimateResponse{}, errors.New("invalid merchant location")
-		}
+		// h3Cell, err := utils.LatLonToH3(merchant.Lat, merchant.Lng)
+		// if err != nil {
+		// 	return EstimateResponse{}, errors.New("invalid merchant location")
+		// }
 
 		points = append(points, merchantPoint{
 			MerchantID: o.MerchantID,
 			Lat:        merchant.Lat,
 			Lng:        merchant.Lng,
-			H3Cell:     h3Cell,
+			H3Cell:     merchant.H3Index,
 			IsStart:    o.IsStartingPoint,
 			Order:      o,
 		})
