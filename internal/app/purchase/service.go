@@ -57,6 +57,63 @@ type merchantPoint struct {
 	Order      Order
 }
 
+func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, lat float64, lng float64, name string) (GetMerchantsNearbyResponse, error) {
+	rows, err := s.queries.GetAllMerchantsWithItemsSortedByH3Distance(ctx, database.GetAllMerchantsWithItemsSortedByH3DistanceParams{Point: lat, Point_2: lng, Column3: name})
+	if err != nil {
+		return GetMerchantsNearbyResponse{}, fmt.Errorf("failed to fetch merchants with items: %w", err)
+	}
+
+	merchantMap := make(map[string]*MerchantWithItemsResponse)
+	for _, row := range rows {
+		merchantID := row.MerchantID.String()
+
+		if _, exists := merchantMap[merchantID]; !exists {
+			merchantMap[merchantID] = &MerchantWithItemsResponse{
+				Merchant: MerchantInfo{
+					MerchantID:       merchantID,
+					Name:             row.MerchantName,
+					MerchantCategory: row.MerchantCategory,
+					ImageUrl:         row.MerchantImageUrl,
+					Location: Location{
+						Lat:  row.Lat,
+						Long: row.Lng,
+					},
+					CreatedAt: row.MerchantCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
+				},
+				Items: []ItemInfo{},
+			}
+		}
+
+		if row.ItemID != uuid.Nil {
+			merchantMap[merchantID].Items = append(merchantMap[merchantID].Items, ItemInfo{
+				ItemID:          row.ItemID.String(),
+				Name:            row.ItemName,
+				ProductCategory: row.ProductCategory,
+				Price:           row.Price,
+				ImageUrl:        row.ItemImageUrl,
+				CreatedAt:       row.ItemCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
+			})
+		}
+	}
+
+	var data []MerchantWithItemsResponse
+	for _, m := range merchantMap {
+		data = append(data, *m)
+	}
+
+	// TODO: Untuk production, pertimbangkan pagination di DB level (lebih kompleks karena grouping)
+	// Untuk sekarang, kita asumsikan jumlah merchant terbatas (<100)
+
+	return GetMerchantsNearbyResponse{
+		Data: data,
+		Meta: PaginationMeta{
+			Limit:  0, // bisa diisi jika ada pagination
+			Offset: 0,
+			Total:  len(data),
+		},
+	}, nil
+}
+
 func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, userID uuid.UUID, req EstimateRequest) (EstimateResponse, error) {
 	if len(req.Orders) == 0 {
 		return EstimateResponse{}, errors.New("orders cannot be empty")
@@ -158,16 +215,16 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, userID uuid.U
 			return EstimateResponse{}, errors.New("merchant not found")
 		}
 
-		h3Cell, err := utils.LatLonToH3(merchant.Lat, merchant.Lng)
-		if err != nil {
-			return EstimateResponse{}, errors.New("invalid merchant location")
-		}
+		// h3Cell, err := utils.LatLonToH3(merchant.Lat, merchant.Lng)
+		// if err != nil {
+		// 	return EstimateResponse{}, errors.New("invalid merchant location")
+		// }
 
 		points = append(points, merchantPoint{
 			MerchantID: o.MerchantID,
 			Lat:        merchant.Lat,
 			Lng:        merchant.Lng,
-			H3Cell:     h3Cell,
+			H3Cell:     merchant.H3Index,
 			IsStart:    o.IsStartingPoint,
 			Order:      o,
 		})

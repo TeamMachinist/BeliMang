@@ -146,32 +146,6 @@ func (q *Queries) GetOrderById(ctx context.Context, dollar_1 uuid.UUID) (GetOrde
 	return i, err
 }
 
-const getOrdersHistory = `-- name: GetOrdersHistory :many
-SELECT id
-FROM orders
-WHERE user_id = $1::uuid
-`
-
-func (q *Queries) GetOrdersHistory(ctx context.Context, dollar_1 uuid.UUID) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, getOrdersHistory, dollar_1)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []uuid.UUID{}
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return nil, err
-		}
-		items = append(items, id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getOrdersWithDetails = `-- name: GetOrdersWithDetails :many
 SELECT 
     o.id AS order_id,

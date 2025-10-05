@@ -24,6 +24,7 @@ type Querier interface {
 	CreateOrderItem(ctx context.Context, arg CreateOrderItemParams) error
 	CreateOrderMerchant(ctx context.Context, arg CreateOrderMerchantParams) (uuid.UUID, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (Users, error)
+	GetAllMerchantsWithItemsSortedByH3Distance(ctx context.Context, arg GetAllMerchantsWithItemsSortedByH3DistanceParams) ([]GetAllMerchantsWithItemsSortedByH3DistanceRow, error)
 	GetEstimateById(ctx context.Context, dollar_1 uuid.UUID) (Estimates, error)
 	GetEstimateOrderDetails(ctx context.Context, dollar_1 uuid.UUID) ([]GetEstimateOrderDetailsRow, error)
 	GetEstimateOrderIds(ctx context.Context, estimateID uuid.UUID) ([]GetEstimateOrderIdsRow, error)
@@ -32,7 +33,6 @@ type Querier interface {
 	GetMerchantLatLong(ctx context.Context, merchantID uuid.UUID) (GetMerchantLatLongRow, error)
 	GetMerchantsLatLong(ctx context.Context, merchantID []uuid.UUID) ([]GetMerchantsLatLongRow, error)
 	GetOrderById(ctx context.Context, dollar_1 uuid.UUID) (GetOrderByIdRow, error)
-	GetOrdersHistory(ctx context.Context, dollar_1 uuid.UUID) ([]uuid.UUID, error)
 	GetOrdersWithDetails(ctx context.Context, arg GetOrdersWithDetailsParams) ([]GetOrdersWithDetailsRow, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error)
 	GetUserByUsernameAndRole(ctx context.Context, arg GetUserByUsernameAndRoleParams) (Users, error)

@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS items (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+
 -- 1. PRIMARY INDEX: merchant_id (base filter - always used)
 CREATE INDEX IF NOT EXISTS idx_items_merchant_id
     ON items(merchant_id);

@@ -7,8 +7,10 @@ package database
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
+	h3_go "github.com/uber/h3-go/v4"
 )
 
 const createEstimate = `-- name: CreateEstimate :one
@@ -83,6 +85,89 @@ type CreateEstimateOrderItemParams struct {
 func (q *Queries) CreateEstimateOrderItem(ctx context.Context, arg CreateEstimateOrderItemParams) error {
 	_, err := q.db.Exec(ctx, createEstimateOrderItem, arg.EstimateOrderID, arg.ItemID, arg.Quantity)
 	return err
+}
+
+const getAllMerchantsWithItemsSortedByH3Distance = `-- name: GetAllMerchantsWithItemsSortedByH3Distance :many
+SELECT
+    m.id AS merchant_id,
+    m.name AS merchant_name,
+    m.merchant_category,
+    m.image_url AS merchant_image_url,
+    m.lat,
+    m.lng,
+    m.created_at AS merchant_created_at,
+    i.id AS item_id,
+    i.name AS item_name,
+    i.product_category,
+    i.price,
+    i.image_url AS item_image_url,
+    i.created_at AS item_created_at,
+    h3_grid_distance(
+        h3_latlng_to_cell(Point($1, $2), 10),
+        m.h3_index
+    ) AS h3_distance
+FROM merchants m
+JOIN items i ON m.id = i.merchant_id
+WHERE ($3 = '' OR m.name ILIKE '%' || $3 || '%')
+ORDER BY h3_distance ASC, m.created_at DESC, i.created_at ASC
+`
+
+type GetAllMerchantsWithItemsSortedByH3DistanceParams struct {
+	Point   float64     `json:"point"`
+	Point_2 float64     `json:"point_2"`
+	Column3 interface{} `json:"column_3"`
+}
+
+type GetAllMerchantsWithItemsSortedByH3DistanceRow struct {
+	MerchantID        uuid.UUID   `json:"merchant_id"`
+	MerchantName      string      `json:"merchant_name"`
+	MerchantCategory  string      `json:"merchant_category"`
+	MerchantImageUrl  string      `json:"merchant_image_url"`
+	Lat               float64     `json:"lat"`
+	Lng               float64     `json:"lng"`
+	MerchantCreatedAt time.Time   `json:"merchant_created_at"`
+	ItemID            uuid.UUID   `json:"item_id"`
+	ItemName          string      `json:"item_name"`
+	ProductCategory   string      `json:"product_category"`
+	Price             int64       `json:"price"`
+	ItemImageUrl      string      `json:"item_image_url"`
+	ItemCreatedAt     time.Time   `json:"item_created_at"`
+	H3Distance        interface{} `json:"h3_distance"`
+}
+
+func (q *Queries) GetAllMerchantsWithItemsSortedByH3Distance(ctx context.Context, arg GetAllMerchantsWithItemsSortedByH3DistanceParams) ([]GetAllMerchantsWithItemsSortedByH3DistanceRow, error) {
+	rows, err := q.db.Query(ctx, getAllMerchantsWithItemsSortedByH3Distance, arg.Point, arg.Point_2, arg.Column3)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllMerchantsWithItemsSortedByH3DistanceRow{}
+	for rows.Next() {
+		var i GetAllMerchantsWithItemsSortedByH3DistanceRow
+		if err := rows.Scan(
+			&i.MerchantID,
+			&i.MerchantName,
+			&i.MerchantCategory,
+			&i.MerchantImageUrl,
+			&i.Lat,
+			&i.Lng,
+			&i.MerchantCreatedAt,
+			&i.ItemID,
+			&i.ItemName,
+			&i.ProductCategory,
+			&i.Price,
+			&i.ItemImageUrl,
+			&i.ItemCreatedAt,
+			&i.H3Distance,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getEstimateById = `-- name: GetEstimateById :one
@@ -198,34 +283,41 @@ func (q *Queries) GetItemPricesByIDsAndMerchants(ctx context.Context, arg GetIte
 }
 
 const getMerchantLatLong = `-- name: GetMerchantLatLong :one
-SELECT id, lat, lng
+SELECT id, lat, lng, h3_index::h3index
 FROM merchants
 WHERE id = $1::uuid
 `
 
 type GetMerchantLatLongRow struct {
-	ID  uuid.UUID `json:"id"`
-	Lat float64   `json:"lat"`
-	Lng float64   `json:"lng"`
+	ID      uuid.UUID  `json:"id"`
+	Lat     float64    `json:"lat"`
+	Lng     float64    `json:"lng"`
+	H3Index h3_go.Cell `json:"h3_index"`
 }
 
 func (q *Queries) GetMerchantLatLong(ctx context.Context, merchantID uuid.UUID) (GetMerchantLatLongRow, error) {
 	row := q.db.QueryRow(ctx, getMerchantLatLong, merchantID)
 	var i GetMerchantLatLongRow
-	err := row.Scan(&i.ID, &i.Lat, &i.Lng)
+	err := row.Scan(
+		&i.ID,
+		&i.Lat,
+		&i.Lng,
+		&i.H3Index,
+	)
 	return i, err
 }
 
 const getMerchantsLatLong = `-- name: GetMerchantsLatLong :many
-SELECT id, lat, lng
+SELECT id, lat, lng,h3_index::h3index
 FROM merchants
 WHERE id = ANY($1::uuid[])
 `
 
 type GetMerchantsLatLongRow struct {
-	ID  uuid.UUID `json:"id"`
-	Lat float64   `json:"lat"`
-	Lng float64   `json:"lng"`
+	ID      uuid.UUID  `json:"id"`
+	Lat     float64    `json:"lat"`
+	Lng     float64    `json:"lng"`
+	H3Index h3_go.Cell `json:"h3_index"`
 }
 
 func (q *Queries) GetMerchantsLatLong(ctx context.Context, merchantID []uuid.UUID) ([]GetMerchantsLatLongRow, error) {
@@ -237,7 +329,12 @@ func (q *Queries) GetMerchantsLatLong(ctx context.Context, merchantID []uuid.UUI
 	items := []GetMerchantsLatLongRow{}
 	for rows.Next() {
 		var i GetMerchantsLatLongRow
-		if err := rows.Scan(&i.ID, &i.Lat, &i.Lng); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Lat,
+			&i.Lng,
+			&i.H3Index,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

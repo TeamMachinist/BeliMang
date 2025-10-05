@@ -8,6 +8,10 @@ import (
 )
 
 func PurchaseRoutes(router *gin.Engine, handler *PurchaseHandler, jwtService *jwt.JWTService) {
+	nearby := router.Group("/merchants")
+	{
+		nearby.GET("/nearby/:coords", middleware.RequireUser(jwtService), handler.GetMerchantsNearbyHandler)
+	}
 	purchase := router.Group("/users")
 	purchase.Use(middleware.RequireUser(jwtService))
 	{
