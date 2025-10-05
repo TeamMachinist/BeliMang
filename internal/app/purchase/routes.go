@@ -18,6 +18,7 @@ func PurchaseRoutes(router *gin.Engine, handler *PurchaseHandler, jwtService *jw
 	{
 		purchase.POST("/estimate", handler.Estimate)
 		purchase.POST("/orders", handler.CreateOrder)
+		purchase.GET("/orders", handler.GetOrdersHandler)
 	}
 
 }

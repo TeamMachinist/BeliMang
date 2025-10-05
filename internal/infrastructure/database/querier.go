@@ -34,6 +34,7 @@ type Querier interface {
 	GetMerchantsLatLong(ctx context.Context, merchantID []uuid.UUID) ([]GetMerchantsLatLongRow, error)
 	GetNearestMerchant(ctx context.Context, arg GetNearestMerchantParams) ([]GetNearestMerchantRow, error)
 	GetOrderById(ctx context.Context, dollar_1 uuid.UUID) (GetOrderByIdRow, error)
+	GetOrdersWithDetails(ctx context.Context, arg GetOrdersWithDetailsParams) ([]GetOrdersWithDetailsRow, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error)
 	GetUserByUsernameAndRole(ctx context.Context, arg GetUserByUsernameAndRoleParams) (Users, error)
 	GetUsersByRole(ctx context.Context, arg GetUsersByRoleParams) ([]GetUsersByRoleRow, error)

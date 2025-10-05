@@ -2,6 +2,7 @@ package purchase
 
 import (
 	"belimang/internal/infrastructure/database"
+	logger "belimang/internal/pkg/logging"
 	"belimang/internal/pkg/utils"
 	"context"
 	"errors"
@@ -382,4 +383,204 @@ func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, params *GetMer
 			Total:  int(totalMerchants),
 		},
 	}, nil
+}
+
+func (s *PurchaseService) GetOrdersService(ctx context.Context, userID uuid.UUID, filter OrderFilter) (GetOrdersResponse, error) {
+	// Validate user ID
+	if userID == uuid.Nil {
+		return nil, ErrInvalidUserID
+	}
+
+	var merchantID uuid.UUID
+	if filter.MerchantID != "" {
+		id, err := uuid.Parse(filter.MerchantID)
+		if err == nil {
+			merchantID = id
+		}
+	}
+
+	// Sets default values for optional fields
+	if filter.Limit == 0 {
+		filter.Limit = 5
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	// Generate cache key
+	// cacheKey := s.generateCacheKey(userID, filter)
+
+	// Try to get from cache
+	// cachedData, err := s.redis.Get(ctx, cacheKey).Result()
+	// if err == nil {
+	// 	var result GetOrdersResponse
+	// 	if unmarshalErr := json.Unmarshal([]byte(cachedData), &result); unmarshalErr == nil {
+	// 		return result, nil
+	// 	}
+	// 	// Log cache unmarshal error but continue with database query
+	// 	log.Printf("Failed to unmarshal cached data: %v", unmarshalErr)
+	// } else if err != redis.Nil {
+	// 	// Log cache read error but continue with database query
+	// 	log.Printf("Redis get error: %v", err)
+	// }
+
+	// Prepare query parameters
+	// var namePattern *string
+	// if filter.Name != nil && *filter.Name != "" {
+	// 	pattern := fmt.Sprintf("%%%s%%", *filter.Name)
+	// 	namePattern = &pattern
+	// }
+
+	// Execute query
+	repository := NewPurchaseRepository(s.db)
+	rows, err := repository.GetOrders(
+		ctx, userID, merchantID, filter.Name, filter.MerchantCategory, int32(filter.Limit), int32(filter.Offset))
+	if err != nil {
+		return GetOrdersResponse{}, ErrDatabaseQuery
+	}
+
+	// Handle empty result
+	// if len(rows) == 0 {
+	// 	// Cache empty result for a shorter duration (1 minute)
+	// 	emptyResult := GetOrdersResponse{}
+	// 	if jsonData, err := json.Marshal(emptyResult); err == nil {
+	// 		if setErr := s.redis.Set(ctx, cacheKey, jsonData, 1*time.Minute).Err(); setErr != nil {
+	// 			log.Printf("Failed to cache empty result: %v", setErr)
+	// 		}
+	// 	}
+	// 	return emptyResult, nil
+	// }
+
+	// Transform the flat result into nested structure
+	result, err := s.transformToOrderResponse(rows)
+	if err != nil {
+		logger.ErrorCtx(ctx, "Data transformation error", err)
+		return nil, ErrDataTransformation
+	}
+
+	// Cache the result for 5 minutes
+	// if len(result) > 0 {
+	// 	jsonData, err := json.Marshal(result)
+	// 	if err != nil {
+	// 		log.Printf("Failed to marshal result for caching: %v", err)
+	// 		// Don't return error, just skip caching
+	// 	} else {
+	// 		if setErr := s.redis.Set(ctx, cacheKey, jsonData, 5*time.Minute).Err(); setErr != nil {
+	// 			log.Printf("Failed to cache result: %v", setErr)
+	// 			// Don't return error, caching is optional
+	// 		}
+	// 	}
+	// }
+
+	return result, nil
+}
+
+func (s *PurchaseService) transformToOrderResponse(rows []database.GetOrdersWithDetailsRow) (GetOrdersResponse, error) {
+	if len(rows) == 0 {
+		return GetOrdersResponse{}, nil
+	}
+
+	// Track unique order IDs and merchant IDs per order
+	type orderKey struct {
+		orderID    uuid.UUID
+		merchantID uuid.UUID
+	}
+
+	orderMap := make(map[uuid.UUID]int)      // orderID -> index in result
+	merchantMap := make(map[orderKey]int)    // composite key -> index in order.Orders
+	result := make(GetOrdersResponse, 0, 16) // Pre-allocate reasonable capacity
+
+	for i := range rows {
+		row := &rows[i]
+
+		// Get or create order
+		orderIdx, orderExists := orderMap[row.OrderID]
+		if !orderExists {
+			orderIdx = len(result)
+			orderMap[row.OrderID] = orderIdx
+			result = append(result, OrderResponse{
+				OrderID: row.OrderID.String(),
+				Orders:  make([]MerchantOrder, 0, 4), // Pre-allocate for typical order
+			})
+		}
+
+		// Get or create merchant order
+		key := orderKey{orderID: row.OrderID, merchantID: row.MerchantID}
+		merchantIdx, merchantExists := merchantMap[key]
+		if !merchantExists {
+			merchantIdx = len(result[orderIdx].Orders)
+			merchantMap[key] = merchantIdx
+			result[orderIdx].Orders = append(result[orderIdx].Orders, MerchantOrder{
+				Merchant: Merchant{
+					MerchantID:       row.MerchantID.String(),
+					Name:             row.MerchantName,
+					MerchantCategory: row.MerchantCategory,
+					ImageURL:         row.MerchantImageUrl,
+					Location: Location{
+						Lat:  row.MerchantLat,
+						Long: row.MerchantLng,
+					},
+					CreatedAt: formatTimestamp(row.MerchantCreatedAt),
+				},
+				Items: make([]Item, 0, 8), // Pre-allocate for typical item count
+			})
+		}
+
+		// Append item directly
+		result[orderIdx].Orders[merchantIdx].Items = append(
+			result[orderIdx].Orders[merchantIdx].Items,
+			Item{
+				ItemID:          row.ItemID.String(),
+				Name:            row.ItemName,
+				ProductCategory: row.ProductCategory,
+				Price:           row.ItemPrice,
+				Quantity:        row.Quantity,
+				ImageURL:        row.ItemImageUrl,
+				CreatedAt:       formatTimestamp(row.ItemCreatedAt),
+			},
+		)
+	}
+
+	return result, nil
+}
+
+// func (s *PurchaseService) generateCacheKey(userID uuid.UUID, filter FilterOrderRequest) string {
+// 	key := fmt.Sprintf("orders:user:%s:limit:%d:offset:%d", userID.String(), filter.Limit, filter.Offset)
+
+// 	if filter.MerchantID != nil {
+// 		key += fmt.Sprintf(":merchant:%s", filter.MerchantID.String())
+// 	}
+
+// 	if filter.Name != nil && *filter.Name != "" {
+// 		key += fmt.Sprintf(":name:%s", *filter.Name)
+// 	}
+
+// 	if filter.MerchantCategory != nil && *filter.MerchantCategory != "" {
+// 		key += fmt.Sprintf(":category:%s", *filter.MerchantCategory)
+// 	}
+
+// 	return key
+// }
+
+// InvalidateOrderCache invalidates the cache for a specific user
+// func (s *OrderService) InvalidateOrderCache(ctx context.Context, userID uuid.UUID) error {
+// 	pattern := fmt.Sprintf("orders:user:%s:*", userID.String())
+
+// 	iter := s.redis.Scan(ctx, 0, pattern, 0).Iterator()
+// 	for iter.Next(ctx) {
+// 		if err := s.redis.Del(ctx, iter.Val()).Err(); err != nil {
+// 			log.Printf("Failed to delete cache key %s: %v", iter.Val(), err)
+// 		}
+// 	}
+
+// 	if err := iter.Err(); err != nil {
+// 		return fmt.Errorf("%w: %v", ErrCacheOperation, err)
+// 	}
+
+// 	return nil
+// }
+
+func formatTimestamp(t time.Time) string {
+	// Format in ISO 8601 with nanoseconds
+	return t.Format(time.RFC3339Nano)
 }
