@@ -145,3 +145,117 @@ func (q *Queries) GetOrderById(ctx context.Context, dollar_1 uuid.UUID) (GetOrde
 	)
 	return i, err
 }
+
+const getOrdersWithDetails = `-- name: GetOrdersWithDetails :many
+SELECT 
+    o.id AS order_id,
+    -- o.user_id,
+    -- o.estimate_id,
+    -- o.total_price,
+    -- o.estimated_delivery_time_in_minutes,
+    -- o.created_at AS order_created_at,
+    om.id AS order_merchant_id,
+    -- om.is_starting_point,
+    -- om.created_at AS order_merchant_created_at,
+    m.id AS merchant_id,
+    m.name AS merchant_name,
+    m.merchant_category,
+    m.image_url AS merchant_image_url,
+    m.lat AS merchant_lat,
+    m.lng AS merchant_lng,
+    m.created_at AS merchant_created_at,
+    oi.id AS order_item_id,
+    oi.quantity,
+    -- oi.created_at AS order_item_created_at,
+    i.id AS item_id,
+    i.name AS item_name,
+    i.product_category,
+    i.price AS item_price,
+    i.image_url AS item_image_url,
+    i.created_at AS item_created_at
+FROM orders o
+INNER JOIN order_merchants om ON o.id = om.order_id
+INNER JOIN merchants m ON om.merchant_id = m.id
+INNER JOIN order_items oi ON om.id = oi.order_merchant_id
+INNER JOIN items i ON oi.item_id = i.id
+WHERE o.user_id = $1
+    AND ($2::uuid IS NULL OR $2::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR m.id = $2)
+    AND ($3::text IS NULL OR $3 = '' OR m.name ILIKE '%' || $3 || '%' OR i.name ILIKE '%' || $3 || '%')
+    AND ($4::text IS NULL OR $4 = '' OR m.merchant_category = $4)
+ORDER BY o.created_at DESC, om.created_at ASC, oi.created_at ASC
+LIMIT $5 OFFSET $6
+`
+
+type GetOrdersWithDetailsParams struct {
+	UserID  uuid.UUID `json:"user_id"`
+	Column2 uuid.UUID `json:"column_2"`
+	Column3 string    `json:"column_3"`
+	Column4 string    `json:"column_4"`
+	Limit   int32     `json:"limit"`
+	Offset  int32     `json:"offset"`
+}
+
+type GetOrdersWithDetailsRow struct {
+	OrderID           uuid.UUID `json:"order_id"`
+	OrderMerchantID   uuid.UUID `json:"order_merchant_id"`
+	MerchantID        uuid.UUID `json:"merchant_id"`
+	MerchantName      string    `json:"merchant_name"`
+	MerchantCategory  string    `json:"merchant_category"`
+	MerchantImageUrl  string    `json:"merchant_image_url"`
+	MerchantLat       float64   `json:"merchant_lat"`
+	MerchantLng       float64   `json:"merchant_lng"`
+	MerchantCreatedAt time.Time `json:"merchant_created_at"`
+	OrderItemID       uuid.UUID `json:"order_item_id"`
+	Quantity          int       `json:"quantity"`
+	ItemID            uuid.UUID `json:"item_id"`
+	ItemName          string    `json:"item_name"`
+	ProductCategory   string    `json:"product_category"`
+	ItemPrice         int64     `json:"item_price"`
+	ItemImageUrl      string    `json:"item_image_url"`
+	ItemCreatedAt     time.Time `json:"item_created_at"`
+}
+
+func (q *Queries) GetOrdersWithDetails(ctx context.Context, arg GetOrdersWithDetailsParams) ([]GetOrdersWithDetailsRow, error) {
+	rows, err := q.db.Query(ctx, getOrdersWithDetails,
+		arg.UserID,
+		arg.Column2,
+		arg.Column3,
+		arg.Column4,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetOrdersWithDetailsRow{}
+	for rows.Next() {
+		var i GetOrdersWithDetailsRow
+		if err := rows.Scan(
+			&i.OrderID,
+			&i.OrderMerchantID,
+			&i.MerchantID,
+			&i.MerchantName,
+			&i.MerchantCategory,
+			&i.MerchantImageUrl,
+			&i.MerchantLat,
+			&i.MerchantLng,
+			&i.MerchantCreatedAt,
+			&i.OrderItemID,
+			&i.Quantity,
+			&i.ItemID,
+			&i.ItemName,
+			&i.ProductCategory,
+			&i.ItemPrice,
+			&i.ItemImageUrl,
+			&i.ItemCreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
