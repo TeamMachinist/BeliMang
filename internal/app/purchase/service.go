@@ -75,8 +75,8 @@ func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, lat float64, l
 					MerchantCategory: row.MerchantCategory,
 					ImageUrl:         row.MerchantImageUrl,
 					Location: Location{
-						Lat:  row.Lat,
-						Long: row.Lng,
+						Latitude:  row.Lat,
+						Longitude: row.Lng,
 					},
 					CreatedAt: row.MerchantCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
 				},

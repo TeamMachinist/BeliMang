@@ -46,6 +46,41 @@ type MerchantPoint struct {
 	Order      Order
 }
 
+// models :
+type MerchantWithItemsResponse struct {
+	Merchant MerchantInfo `json:"merchant"`
+	Items    []ItemInfo   `json:"items"`
+}
+
+type MerchantInfo struct {
+	MerchantID       string   `json:"merchantId"`
+	Name             string   `json:"name"`
+	MerchantCategory string   `json:"merchantCategory"`
+	ImageUrl         string   `json:"imageUrl"`
+	Location         Location `json:"location"`
+	CreatedAt        string   `json:"createdAt"` // ISO 8601 with nanoseconds
+}
+
+type ItemInfo struct {
+	ItemID          string `json:"itemId"`
+	Name            string `json:"name"`
+	ProductCategory string `json:"productCategory"`
+	Price           int64  `json:"price"`
+	ImageUrl        string `json:"imageUrl"`
+	CreatedAt       string `json:"createdAt"` // ISO 8601 with nanoseconds
+}
+
+type GetMerchantsNearbyResponse struct {
+	Data []MerchantWithItemsResponse `json:"data"`
+	Meta PaginationMeta              `json:"meta"`
+}
+
+type PaginationMeta struct {
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+	Total  int `json:"total"`
+}
+
 // OrderFilter holds filter params for get user orders
 type OrderFilter struct {
 	MerchantID       string
