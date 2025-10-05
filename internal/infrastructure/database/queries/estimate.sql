@@ -71,11 +71,8 @@ SELECT
     i.price,
     i.image_url AS item_image_url,
     i.created_at AS item_created_at,
-    h3_grid_distance(
-        h3_latlng_to_cell(Point($1, $2), 10),
-        m.h3_index
-    ) AS h3_distance
+    CAST((POWER(m.lat - ($1), 2) + POWER(m.lng - $2, 2)) AS BIGINT) AS distance_squared 
 FROM merchants m
 JOIN items i ON m.id = i.merchant_id
 WHERE ($3 = '' OR m.name ILIKE '%' || $3 || '%')
-ORDER BY h3_distance ASC, m.created_at DESC, i.created_at ASC; 
+ORDER BY distance_squared ASC, m.created_at DESC, i.created_at ASC; 
