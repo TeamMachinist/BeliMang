@@ -101,41 +101,38 @@ SELECT
     i.price,
     i.image_url AS item_image_url,
     i.created_at AS item_created_at,
-    h3_grid_distance(
-        h3_latlng_to_cell(Point($1, $2), 10),
-        m.h3_index
-    ) AS h3_distance
+    CAST((POWER(m.lat - ($1), 2) + POWER(m.lng - $2, 2)) AS BIGINT) AS distance_squared 
 FROM merchants m
 JOIN items i ON m.id = i.merchant_id
 WHERE ($3 = '' OR m.name ILIKE '%' || $3 || '%')
-ORDER BY h3_distance ASC, m.created_at DESC, i.created_at ASC
+ORDER BY distance_squared ASC, m.created_at DESC, i.created_at ASC
 `
 
 type GetAllMerchantsWithItemsSortedByH3DistanceParams struct {
-	Point   float64     `json:"point"`
-	Point_2 float64     `json:"point_2"`
+	Lat     float64     `json:"lat"`
+	Lng     float64     `json:"lng"`
 	Column3 interface{} `json:"column_3"`
 }
 
 type GetAllMerchantsWithItemsSortedByH3DistanceRow struct {
-	MerchantID        uuid.UUID   `json:"merchant_id"`
-	MerchantName      string      `json:"merchant_name"`
-	MerchantCategory  string      `json:"merchant_category"`
-	MerchantImageUrl  string      `json:"merchant_image_url"`
-	Lat               float64     `json:"lat"`
-	Lng               float64     `json:"lng"`
-	MerchantCreatedAt time.Time   `json:"merchant_created_at"`
-	ItemID            uuid.UUID   `json:"item_id"`
-	ItemName          string      `json:"item_name"`
-	ProductCategory   string      `json:"product_category"`
-	Price             int64       `json:"price"`
-	ItemImageUrl      string      `json:"item_image_url"`
-	ItemCreatedAt     time.Time   `json:"item_created_at"`
-	H3Distance        interface{} `json:"h3_distance"`
+	MerchantID        uuid.UUID `json:"merchant_id"`
+	MerchantName      string    `json:"merchant_name"`
+	MerchantCategory  string    `json:"merchant_category"`
+	MerchantImageUrl  string    `json:"merchant_image_url"`
+	Lat               float64   `json:"lat"`
+	Lng               float64   `json:"lng"`
+	MerchantCreatedAt time.Time `json:"merchant_created_at"`
+	ItemID            uuid.UUID `json:"item_id"`
+	ItemName          string    `json:"item_name"`
+	ProductCategory   string    `json:"product_category"`
+	Price             int64     `json:"price"`
+	ItemImageUrl      string    `json:"item_image_url"`
+	ItemCreatedAt     time.Time `json:"item_created_at"`
+	DistanceSquared   int64     `json:"distance_squared"`
 }
 
 func (q *Queries) GetAllMerchantsWithItemsSortedByH3Distance(ctx context.Context, arg GetAllMerchantsWithItemsSortedByH3DistanceParams) ([]GetAllMerchantsWithItemsSortedByH3DistanceRow, error) {
-	rows, err := q.db.Query(ctx, getAllMerchantsWithItemsSortedByH3Distance, arg.Point, arg.Point_2, arg.Column3)
+	rows, err := q.db.Query(ctx, getAllMerchantsWithItemsSortedByH3Distance, arg.Lat, arg.Lng, arg.Column3)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +154,7 @@ func (q *Queries) GetAllMerchantsWithItemsSortedByH3Distance(ctx context.Context
 			&i.Price,
 			&i.ItemImageUrl,
 			&i.ItemCreatedAt,
-			&i.H3Distance,
+			&i.DistanceSquared,
 		); err != nil {
 			return nil, err
 		}

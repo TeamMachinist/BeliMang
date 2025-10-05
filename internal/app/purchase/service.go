@@ -281,7 +281,7 @@ func (s *PurchaseService) CreateOrderByEstimateId(ctx context.Context, userID uu
 	}, nil
 }
 func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, lat float64, lng float64, name string) (GetMerchantsNearbyResponse, error) {
-	rows, err := s.queries.GetAllMerchantsWithItemsSortedByH3Distance(ctx, database.GetAllMerchantsWithItemsSortedByH3DistanceParams{Point: lat, Point_2: lng, Column3: name})
+	rows, err := s.queries.GetAllMerchantsWithItemsSortedByH3Distance(ctx, database.GetAllMerchantsWithItemsSortedByH3DistanceParams{Lat: lat, Lng: lng, Column3: name})
 	if err != nil {
 		return GetMerchantsNearbyResponse{}, fmt.Errorf("failed to fetch merchants with items: %w", err)
 	}

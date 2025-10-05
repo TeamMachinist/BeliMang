@@ -154,6 +154,7 @@ func (h *PurchaseHandler) GetMerchantsNearbyHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to fetch nearby merchants",
 		})
+		fmt.Println(err.Error())
 		return
 	}
 
