@@ -1,5 +1,6 @@
+
 -- name: GetMerchantLatLong :one
-SELECT id, lat, lng
+SELECT id, lat, lng, h3_index::h3index
 FROM merchants
 WHERE id = @merchant_id::uuid;
 
@@ -9,7 +10,7 @@ FROM items
 WHERE id = @item_id::uuid AND merchant_id = @merchant_id::uuid;
 
 -- name: GetMerchantsLatLong :many
-SELECT id, lat, lng
+SELECT id, lat, lng,h3_index::h3index
 FROM merchants
 WHERE id = ANY(@merchant_id::uuid[]);
 

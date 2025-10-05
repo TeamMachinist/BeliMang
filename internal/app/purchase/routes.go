@@ -14,10 +14,10 @@ func PurchaseRoutes(router *gin.Engine, handler *PurchaseHandler, jwtService *jw
 	}
 	purchase := router.Group("/users")
 	purchase.Use(middleware.RequireUser(jwtService))
-
 	{
 		purchase.POST("/estimate", handler.Estimate)
 		purchase.POST("/orders", handler.CreateOrder)
+		purchase.GET("/orders", handler.GetOrdersHandler)
 	}
 
 }

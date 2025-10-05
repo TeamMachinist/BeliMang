@@ -1,11 +1,16 @@
 package purchase
 
 import (
-	"belimang/internal/infrastructure/database"
-	"belimang/internal/pkg/utils"
 	"context"
+	// "encoding/json"
 	"errors"
 	"fmt"
+	"time"
+
+	// "belimang/internal/infrastructure/cache"
+	"belimang/internal/infrastructure/database"
+	logger "belimang/internal/pkg/logging"
+	"belimang/internal/pkg/utils"
 
 	"github.com/google/uuid"
 	"github.com/uber/h3-go/v4"
@@ -50,6 +55,63 @@ type merchantPoint struct {
 	H3Cell     h3.Cell
 	IsStart    bool
 	Order      Order
+}
+
+func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, lat float64, lng float64, name string) (GetMerchantsNearbyResponse, error) {
+	rows, err := s.queries.GetAllMerchantsWithItemsSortedByH3Distance(ctx, database.GetAllMerchantsWithItemsSortedByH3DistanceParams{Point: lat, Point_2: lng, Column3: name})
+	if err != nil {
+		return GetMerchantsNearbyResponse{}, fmt.Errorf("failed to fetch merchants with items: %w", err)
+	}
+
+	merchantMap := make(map[string]*MerchantWithItemsResponse)
+	for _, row := range rows {
+		merchantID := row.MerchantID.String()
+
+		if _, exists := merchantMap[merchantID]; !exists {
+			merchantMap[merchantID] = &MerchantWithItemsResponse{
+				Merchant: MerchantInfo{
+					MerchantID:       merchantID,
+					Name:             row.MerchantName,
+					MerchantCategory: row.MerchantCategory,
+					ImageUrl:         row.MerchantImageUrl,
+					Location: Location{
+						Latitude:  row.Lat,
+						Longitude: row.Lng,
+					},
+					CreatedAt: row.MerchantCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
+				},
+				Items: []ItemInfo{},
+			}
+		}
+
+		if row.ItemID != uuid.Nil {
+			merchantMap[merchantID].Items = append(merchantMap[merchantID].Items, ItemInfo{
+				ItemID:          row.ItemID.String(),
+				Name:            row.ItemName,
+				ProductCategory: row.ProductCategory,
+				Price:           row.Price,
+				ImageUrl:        row.ItemImageUrl,
+				CreatedAt:       row.ItemCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
+			})
+		}
+	}
+
+	var data []MerchantWithItemsResponse
+	for _, m := range merchantMap {
+		data = append(data, *m)
+	}
+
+	// TODO: Untuk production, pertimbangkan pagination di DB level (lebih kompleks karena grouping)
+	// Untuk sekarang, kita asumsikan jumlah merchant terbatas (<100)
+
+	return GetMerchantsNearbyResponse{
+		Data: data,
+		Meta: PaginationMeta{
+			Limit:  0, // bisa diisi jika ada pagination
+			Offset: 0,
+			Total:  len(data),
+		},
+	}, nil
 }
 
 func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, userID uuid.UUID, req EstimateRequest) (EstimateResponse, error) {
@@ -153,16 +215,16 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, userID uuid.U
 			return EstimateResponse{}, errors.New("merchant not found")
 		}
 
-		h3Cell, err := utils.LatLonToH3(merchant.Lat, merchant.Lng)
-		if err != nil {
-			return EstimateResponse{}, errors.New("invalid merchant location")
-		}
+		// h3Cell, err := utils.LatLonToH3(merchant.Lat, merchant.Lng)
+		// if err != nil {
+		// 	return EstimateResponse{}, errors.New("invalid merchant location")
+		// }
 
 		points = append(points, merchantPoint{
 			MerchantID: o.MerchantID,
 			Lat:        merchant.Lat,
 			Lng:        merchant.Lng,
-			H3Cell:     h3Cell,
+			H3Cell:     merchant.H3Index,
 			IsStart:    o.IsStartingPoint,
 			Order:      o,
 		})
@@ -280,59 +342,203 @@ func (s *PurchaseService) CreateOrderByEstimateId(ctx context.Context, userID uu
 		OrderId: order.ID.String(),
 	}, nil
 }
-func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, lat float64, lng float64, name string) (GetMerchantsNearbyResponse, error) {
-	rows, err := s.queries.GetAllMerchantsWithItemsSortedByH3Distance(ctx, database.GetAllMerchantsWithItemsSortedByH3DistanceParams{Lat: lat, Lng: lng, Column3: name})
-	if err != nil {
-		return GetMerchantsNearbyResponse{}, fmt.Errorf("failed to fetch merchants with items: %w", err)
+
+func (s *PurchaseService) GetOrdersService(ctx context.Context, userID uuid.UUID, filter OrderFilter) (GetOrdersResponse, error) {
+	// Validate user ID
+	if userID == uuid.Nil {
+		return nil, ErrInvalidUserID
 	}
 
-	merchantMap := make(map[string]*MerchantWithItemsResponse)
-	for _, row := range rows {
-		merchantID := row.MerchantID.String()
+	var merchantID uuid.UUID
+	if filter.MerchantID != "" {
+		id, err := uuid.Parse(filter.MerchantID)
+		if err == nil {
+			merchantID = id
+		}
+	}
 
-		if _, exists := merchantMap[merchantID]; !exists {
-			merchantMap[merchantID] = &MerchantWithItemsResponse{
-				Merchant: MerchantInfo{
-					MerchantID:       merchantID,
-					Name:             row.MerchantName,
-					MerchantCategory: row.MerchantCategory,
-					ImageUrl:         row.MerchantImageUrl,
-					Location: Location{
-						Lat:  row.Lat,
-						Long: row.Lng,
-					},
-					CreatedAt: row.MerchantCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
-				},
-				Items: []ItemInfo{},
-			}
+	// Sets default values for optional fields
+	if filter.Limit == 0 {
+		filter.Limit = 5
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	// Generate cache key
+	// cacheKey := s.generateCacheKey(userID, filter)
+
+	// Try to get from cache
+	// cachedData, err := s.redis.Get(ctx, cacheKey).Result()
+	// if err == nil {
+	// 	var result GetOrdersResponse
+	// 	if unmarshalErr := json.Unmarshal([]byte(cachedData), &result); unmarshalErr == nil {
+	// 		return result, nil
+	// 	}
+	// 	// Log cache unmarshal error but continue with database query
+	// 	log.Printf("Failed to unmarshal cached data: %v", unmarshalErr)
+	// } else if err != redis.Nil {
+	// 	// Log cache read error but continue with database query
+	// 	log.Printf("Redis get error: %v", err)
+	// }
+
+	// Prepare query parameters
+	// var namePattern *string
+	// if filter.Name != nil && *filter.Name != "" {
+	// 	pattern := fmt.Sprintf("%%%s%%", *filter.Name)
+	// 	namePattern = &pattern
+	// }
+
+	// Execute query
+	repository := NewPurchaseRepository(s.db)
+	rows, err := repository.GetOrders(
+		ctx, userID, merchantID, filter.Name, filter.MerchantCategory, int32(filter.Limit), int32(filter.Offset))
+	if err != nil {
+		return GetOrdersResponse{}, ErrDatabaseQuery
+	}
+
+	// Handle empty result
+	// if len(rows) == 0 {
+	// 	// Cache empty result for a shorter duration (1 minute)
+	// 	emptyResult := GetOrdersResponse{}
+	// 	if jsonData, err := json.Marshal(emptyResult); err == nil {
+	// 		if setErr := s.redis.Set(ctx, cacheKey, jsonData, 1*time.Minute).Err(); setErr != nil {
+	// 			log.Printf("Failed to cache empty result: %v", setErr)
+	// 		}
+	// 	}
+	// 	return emptyResult, nil
+	// }
+
+	// Transform the flat result into nested structure
+	result, err := s.transformToOrderResponse(rows)
+	if err != nil {
+		logger.ErrorCtx(ctx, "Data transformation error", err)
+		return nil, ErrDataTransformation
+	}
+
+	// Cache the result for 5 minutes
+	// if len(result) > 0 {
+	// 	jsonData, err := json.Marshal(result)
+	// 	if err != nil {
+	// 		log.Printf("Failed to marshal result for caching: %v", err)
+	// 		// Don't return error, just skip caching
+	// 	} else {
+	// 		if setErr := s.redis.Set(ctx, cacheKey, jsonData, 5*time.Minute).Err(); setErr != nil {
+	// 			log.Printf("Failed to cache result: %v", setErr)
+	// 			// Don't return error, caching is optional
+	// 		}
+	// 	}
+	// }
+
+	return result, nil
+}
+
+func (s *PurchaseService) transformToOrderResponse(rows []database.GetOrdersWithDetailsRow) (GetOrdersResponse, error) {
+	if len(rows) == 0 {
+		return GetOrdersResponse{}, nil
+	}
+
+	// Track unique order IDs and merchant IDs per order
+	type orderKey struct {
+		orderID    uuid.UUID
+		merchantID uuid.UUID
+	}
+
+	orderMap := make(map[uuid.UUID]int)      // orderID -> index in result
+	merchantMap := make(map[orderKey]int)    // composite key -> index in order.Orders
+	result := make(GetOrdersResponse, 0, 16) // Pre-allocate reasonable capacity
+
+	for i := range rows {
+		row := &rows[i]
+
+		// Get or create order
+		orderIdx, orderExists := orderMap[row.OrderID]
+		if !orderExists {
+			orderIdx = len(result)
+			orderMap[row.OrderID] = orderIdx
+			result = append(result, OrderResponse{
+				OrderID: row.OrderID.String(),
+				Orders:  make([]MerchantOrder, 0, 4), // Pre-allocate for typical order
+			})
 		}
 
-		if row.ItemID != uuid.Nil {
-			merchantMap[merchantID].Items = append(merchantMap[merchantID].Items, ItemInfo{
+		// Get or create merchant order
+		key := orderKey{orderID: row.OrderID, merchantID: row.MerchantID}
+		merchantIdx, merchantExists := merchantMap[key]
+		if !merchantExists {
+			merchantIdx = len(result[orderIdx].Orders)
+			merchantMap[key] = merchantIdx
+			result[orderIdx].Orders = append(result[orderIdx].Orders, MerchantOrder{
+				Merchant: Merchant{
+					MerchantID:       row.MerchantID.String(),
+					Name:             row.MerchantName,
+					MerchantCategory: row.MerchantCategory,
+					ImageURL:         row.MerchantImageUrl,
+					Location: Location{
+						Latitude:  row.MerchantLat,
+						Longitude: row.MerchantLng,
+					},
+					CreatedAt: formatTimestamp(row.MerchantCreatedAt),
+				},
+				Items: make([]Item, 0, 8), // Pre-allocate for typical item count
+			})
+		}
+
+		// Append item directly
+		result[orderIdx].Orders[merchantIdx].Items = append(
+			result[orderIdx].Orders[merchantIdx].Items,
+			Item{
 				ItemID:          row.ItemID.String(),
 				Name:            row.ItemName,
 				ProductCategory: row.ProductCategory,
-				Price:           row.Price,
-				ImageUrl:        row.ItemImageUrl,
-				CreatedAt:       row.ItemCreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00"),
-			})
-		}
+				Price:           row.ItemPrice,
+				Quantity:        row.Quantity,
+				ImageURL:        row.ItemImageUrl,
+				CreatedAt:       formatTimestamp(row.ItemCreatedAt),
+			},
+		)
 	}
 
-	var data []MerchantWithItemsResponse
-	for _, m := range merchantMap {
-		data = append(data, *m)
-	}
+	return result, nil
+}
 
-	// TODO: Untuk production, pertimbangkan pagination di DB level (lebih kompleks karena grouping)
-	// Untuk sekarang, kita asumsikan jumlah merchant terbatas (<100)
+// func (s *PurchaseService) generateCacheKey(userID uuid.UUID, filter FilterOrderRequest) string {
+// 	key := fmt.Sprintf("orders:user:%s:limit:%d:offset:%d", userID.String(), filter.Limit, filter.Offset)
 
-	return GetMerchantsNearbyResponse{
-		Data: data,
-		Meta: PaginationMeta{
-			Limit:  0, // bisa diisi jika ada pagination
-			Offset: 0,
-			Total:  len(data),
-		},
-	}, nil
+// 	if filter.MerchantID != nil {
+// 		key += fmt.Sprintf(":merchant:%s", filter.MerchantID.String())
+// 	}
+
+// 	if filter.Name != nil && *filter.Name != "" {
+// 		key += fmt.Sprintf(":name:%s", *filter.Name)
+// 	}
+
+// 	if filter.MerchantCategory != nil && *filter.MerchantCategory != "" {
+// 		key += fmt.Sprintf(":category:%s", *filter.MerchantCategory)
+// 	}
+
+// 	return key
+// }
+
+// InvalidateOrderCache invalidates the cache for a specific user
+// func (s *OrderService) InvalidateOrderCache(ctx context.Context, userID uuid.UUID) error {
+// 	pattern := fmt.Sprintf("orders:user:%s:*", userID.String())
+
+// 	iter := s.redis.Scan(ctx, 0, pattern, 0).Iterator()
+// 	for iter.Next(ctx) {
+// 		if err := s.redis.Del(ctx, iter.Val()).Err(); err != nil {
+// 			log.Printf("Failed to delete cache key %s: %v", iter.Val(), err)
+// 		}
+// 	}
+
+// 	if err := iter.Err(); err != nil {
+// 		return fmt.Errorf("%w: %v", ErrCacheOperation, err)
+// 	}
+
+// 	return nil
+// }
+
+func formatTimestamp(t time.Time) string {
+	// Format in ISO 8601 with nanoseconds
+	return t.Format(time.RFC3339Nano)
 }

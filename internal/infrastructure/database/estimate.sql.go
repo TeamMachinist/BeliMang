@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	h3_go "github.com/uber/h3-go/v4"
 )
 
 const createEstimate = `-- name: CreateEstimate :one
@@ -279,34 +280,41 @@ func (q *Queries) GetItemPricesByIDsAndMerchants(ctx context.Context, arg GetIte
 }
 
 const getMerchantLatLong = `-- name: GetMerchantLatLong :one
-SELECT id, lat, lng
+SELECT id, lat, lng, h3_index::h3index
 FROM merchants
 WHERE id = $1::uuid
 `
 
 type GetMerchantLatLongRow struct {
-	ID  uuid.UUID `json:"id"`
-	Lat float64   `json:"lat"`
-	Lng float64   `json:"lng"`
+	ID      uuid.UUID  `json:"id"`
+	Lat     float64    `json:"lat"`
+	Lng     float64    `json:"lng"`
+	H3Index h3_go.Cell `json:"h3_index"`
 }
 
 func (q *Queries) GetMerchantLatLong(ctx context.Context, merchantID uuid.UUID) (GetMerchantLatLongRow, error) {
 	row := q.db.QueryRow(ctx, getMerchantLatLong, merchantID)
 	var i GetMerchantLatLongRow
-	err := row.Scan(&i.ID, &i.Lat, &i.Lng)
+	err := row.Scan(
+		&i.ID,
+		&i.Lat,
+		&i.Lng,
+		&i.H3Index,
+	)
 	return i, err
 }
 
 const getMerchantsLatLong = `-- name: GetMerchantsLatLong :many
-SELECT id, lat, lng
+SELECT id, lat, lng,h3_index::h3index
 FROM merchants
 WHERE id = ANY($1::uuid[])
 `
 
 type GetMerchantsLatLongRow struct {
-	ID  uuid.UUID `json:"id"`
-	Lat float64   `json:"lat"`
-	Lng float64   `json:"lng"`
+	ID      uuid.UUID  `json:"id"`
+	Lat     float64    `json:"lat"`
+	Lng     float64    `json:"lng"`
+	H3Index h3_go.Cell `json:"h3_index"`
 }
 
 func (q *Queries) GetMerchantsLatLong(ctx context.Context, merchantID []uuid.UUID) ([]GetMerchantsLatLongRow, error) {
@@ -318,7 +326,12 @@ func (q *Queries) GetMerchantsLatLong(ctx context.Context, merchantID []uuid.UUI
 	items := []GetMerchantsLatLongRow{}
 	for rows.Next() {
 		var i GetMerchantsLatLongRow
-		if err := rows.Scan(&i.ID, &i.Lat, &i.Lng); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Lat,
+			&i.Lng,
+			&i.H3Index,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
