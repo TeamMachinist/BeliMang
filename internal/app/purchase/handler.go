@@ -2,6 +2,9 @@ package purchase
 
 import (
 	"net/http"
+	"strconv"
+
+	logger "belimang/internal/pkg/logging"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
@@ -110,4 +113,72 @@ func (h *PurchaseHandler) CreateOrder(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, resp)
+}
+
+func (h *PurchaseHandler) GetOrdersHandler(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		logger.ErrorCtx(c, "Unauthorized account", "error", err.Error())
+		c.JSON(http.StatusUnauthorized, NewErrorResponse("unathorized error", err.Error()))
+		return
+	}
+
+	filter := OrderFilter{
+		MerchantID:       c.Query("merchantId"),
+		Name:             c.Query("name"),
+		MerchantCategory: c.Query("merchantCategory"),
+	}
+	// Parse limit & offset
+	if l := c.DefaultQuery("limit", "5"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil {
+			filter.Limit = v
+		} else {
+			filter.Limit = 5
+		}
+	} else {
+		filter.Limit = 5
+	}
+	if o := c.DefaultQuery("offset", "0"); o != "" {
+		if v, err := strconv.Atoi(o); err == nil {
+			filter.Offset = v
+		} else {
+			filter.Offset = 0
+		}
+	} else {
+		filter.Offset = 0
+	}
+
+	// Validate merchantCategory
+	if filter.MerchantCategory != "" {
+		if _, ok := validMerchantCategories[filter.MerchantCategory]; !ok {
+			c.JSON(http.StatusOK, GetOrdersResponse{})
+			return
+		}
+	}
+
+	resp, err := h.purchaseService.GetOrdersService(c, userID, filter)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, NewErrorResponse("internal error", err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+var validMerchantCategories = map[string]struct{}{
+	"SmallRestaurant":       {},
+	"MediumRestaurant":      {},
+	"LargeRestaurant":       {},
+	"MerchandiseRestaurant": {},
+	"BoothKiosk":            {},
+	"ConvenienceStore":      {},
+}
+
+func getUserID(c *gin.Context) (uuid.UUID, error) {
+	rawUserID, exists := c.Get("user_id")
+	if !exists {
+		return uuid.Nil, ErrInvalidUserID
+	}
+	userID, _ := uuid.Parse(rawUserID.(string))
+
+	return userID, nil
 }
