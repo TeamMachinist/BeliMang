@@ -23,7 +23,7 @@ spec:
       containers:
         - name: belimang-app
           image: belimang-app:latest
-          imagePullPolicy: Never
+          imagePullPolicy: Always
           ports:
             - containerPort: 8080
           env:
@@ -44,8 +44,8 @@ spec:
                   key: HTTP_PORT
             - name: DATABASE_URL
               valueFrom:
-                configMapKeyRef:
-                  name: belimang-config
+                secretKeyRef:
+                  name: belimang-secret
                   key: DATABASE_URL
             - name: REDIS_ADDR
               valueFrom:
@@ -54,8 +54,8 @@ spec:
                   key: REDIS_ADDR
             - name: JWT_SECRET_KEY
               valueFrom:
-                configMapKeyRef:
-                  name: belimang-config
+                secretKeyRef:
+                  name: belimang-secret
                   key: JWT_SECRET_KEY
             - name: JWT_ISSUER
               valueFrom:
@@ -98,30 +98,28 @@ spec:
                   name: belimang-config
                   key: GOTMPDIR
           livenessProbe:
-            exec:
-              command:
-                - /app/server
-                - health
+            httpGet:
+              path: /healthz
+              port: 8080
             initialDelaySeconds: 40
             periodSeconds: 30
             timeoutSeconds: 3
             failureThreshold: 3
           readinessProbe:
-            exec:
-              command:
-                - /app/server
-                - health
+            httpGet:
+              path: /healthz
+              port: 8080
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
           resources:
             limits:
-              cpu: "4"
-              memory: "2Gi"
+              cpu: "3"
+              memory: "4Gi"
             requests:
               cpu: "2"
-              memory: "512Mi"
+              memory: "1Gi"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false
@@ -140,10 +138,10 @@ spec:
       volumes:
         - name: tmp-volume
           emptyDir:
-            sizeLimit: 2Gi
+            sizeLimit: 4Gi
         - name: go-cache-volume
           emptyDir:
-            sizeLimit: 1Gi
+            sizeLimit: 2Gi
         - name: go-tmp-volume
           emptyDir:
-            sizeLimit: 1Gi
+            sizeLimit: 2Gi

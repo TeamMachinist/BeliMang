@@ -37,7 +37,7 @@ ENV CGO_ENABLED=1 \
 RUN go build -v \
     -ldflags="-s -w" \
     -o /app/bin/server \
-    ./cmd
+    ./cmd/main.go
 
 # Stage 3: Production runtime
 FROM debian:bookworm-slim AS production

@@ -3,10 +3,12 @@ kind: PersistentVolumeClaim
 metadata:
   name: redis-pvc
   namespace: belimang
+  labels:
+    app: redis
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi
-  storageClassName: standard
+      storage: 20Gi
+  # storageClassName: fast-ssd  # Uncomment and specify your storage class if needed

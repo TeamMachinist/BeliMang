@@ -73,27 +73,27 @@ deploy-images: docker-login push-images
 # Kubernetes deployment
 k8s-deploy:
 	@echo "Updating Kubernetes manifests with registry images..."
-	@sed -i.bak 's|belimang-postgres:latest|$(POSTGRES_IMAGE)|g' k8s/postgres-deployment.yaml
-	@sed -i.bak 's|belimang-app:latest|$(APP_IMAGE)|g' k8s/app-deployment.yaml
-	@sed -i.bak 's|imagePullPolicy: Never|imagePullPolicy: Always|g' k8s/postgres-deployment.yaml k8s/app-deployment.yaml
+	@sed -i.bak 's|belimang-postgres:latest|$(POSTGRES_IMAGE)|g' deployment/k8s/postgres-deployment.yaml
+	@sed -i.bak 's|belimang-app:latest|$(APP_IMAGE)|g' deployment/k8s/app-deployment.yaml
+	@sed -i.bak 's|imagePullPolicy: Never|imagePullPolicy: Always|g' deployment/k8s/postgres-deployment.yaml deployment/k8s/app-deployment.yaml
 	@echo "Deploying to Kubernetes..."
-	cd k8s && ./deploy.sh deploy
+	cd deployment/k8s && ./deploy.sh deploy
 	@echo "Restoring original manifests..."
-	@mv k8s/postgres-deployment.yaml.bak k8s/postgres-deployment.yaml
-	@mv k8s/app-deployment.yaml.bak k8s/app-deployment.yaml
+	@mv deployment/k8s/postgres-deployment.yaml.bak deployment/k8s/postgres-deployment.yaml
+	@mv deployment/k8s/app-deployment.yaml.bak deployment/k8s/app-deployment.yaml
 
 # Kubernetes cleanup
 k8s-cleanup:
-	cd k8s && ./deploy.sh cleanup
+	cd deployment/k8s && ./deploy.sh cleanup
 
 # K3s deployment (lightweight Kubernetes)
 k3s-deploy:
 	@echo "Deploying to K3s..."
-	cd k8s && ./deploy-k3s.sh deploy
+	cd deployment/k3s && ./deploy.sh deploy
 
 # K3s cleanup
 k3s-cleanup:
-	cd k8s && ./deploy-k3s.sh cleanup
+	cd deployment/k3s && ./deploy.sh cleanup
 
 # Database seeding
 POSTGRES_USER ?= postgres

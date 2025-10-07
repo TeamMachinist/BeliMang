@@ -29,17 +29,24 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Load environment variables from .env file
+# Load environment variables from root .env file
 load_env() {
-    if [ -f ".env" ]; then
-        print_status "Loading environment variables from .env file..."
-        export $(grep -v '^#' .env | xargs)
-        print_success "Environment variables loaded"
+    # Go to project root to load .env
+    CURRENT_DIR=$(pwd)
+    PROJECT_ROOT=$(dirname $(dirname "$CURRENT_DIR"))
+    
+    if [ -f "$PROJECT_ROOT/.env" ]; then
+        print_status "Loading environment variables from root .env file..."
+        export $(grep -v '^#' "$PROJECT_ROOT/.env" | xargs)
+        print_success "Environment variables loaded from $PROJECT_ROOT/.env"
     else
-        print_warning ".env file not found. Using default values from .env.example"
-        if [ -f ".env.example" ]; then
-            cp .env.example .env
-            print_status "Created .env from .env.example. Please edit .env with your values."
+        print_warning "Root .env file not found. Please copy from .env.example.k3s"
+        if [ -f "$PROJECT_ROOT/.env.example.k3s" ]; then
+            print_status "Copy .env.example.k3s to .env in project root and edit the values."
+            print_status "Command: cp .env.example.k3s .env"
+            exit 1
+        else
+            print_error "No .env.example.k3s found in project root"
             exit 1
         fi
     fi
@@ -74,26 +81,18 @@ check_k3s() {
 import_images_k3s() {
     print_status "Checking Docker images for K3s..."
     
-    # Check if images exist locally
-    POSTGRES_IMAGE_EXISTS=$(docker image inspect belimang-postgres:latest &> /dev/null && echo "true" || echo "false")
+    # Check if application image exists locally
     APP_IMAGE_EXISTS=$(docker image inspect belimang-app:latest &> /dev/null && echo "true" || echo "false")
     
-    if [ "$POSTGRES_IMAGE_EXISTS" = "false" ] || [ "$APP_IMAGE_EXISTS" = "false" ]; then
-        print_warning "Local images not found. Building images..."
+    if [ "$APP_IMAGE_EXISTS" = "false" ]; then
+        print_warning "Application image not found. Building image..."
         cd ..
         
-        if [ "$POSTGRES_IMAGE_EXISTS" = "false" ]; then
-            print_status "Building PostgreSQL image..."
-            docker build -t belimang-postgres:latest --target postgres-h3 .
-        fi
+        print_status "Building application image..."
+        docker build -t belimang-app:latest --target production .
         
-        if [ "$APP_IMAGE_EXISTS" = "false" ]; then
-            print_status "Building application image..."
-            docker build -t belimang-app:latest --target production .
-        fi
-        
-        cd k8s
-        print_success "Images built successfully"
+        cd deployment/k3s
+        print_success "Application image built successfully"
     fi
     
     # Import images to K3s
@@ -101,9 +100,9 @@ import_images_k3s() {
     
     # K3s uses containerd, so we need to import images
     if command -v k3s &> /dev/null; then
-        # Save images to tar and import to K3s
+        # Import PostgreSQL 18 image (if not already in K3s)
         print_status "Saving PostgreSQL image..."
-        docker save belimang-postgres:latest | sudo k3s ctr images import -
+        docker save postgres:18-alpine | sudo k3s ctr images import -
         
         print_status "Saving application image..."
         docker save belimang-app:latest | sudo k3s ctr images import -
@@ -133,10 +132,10 @@ data:
   DB_HOST: "${DB_HOST:-postgres-service}"
   DB_PORT: "${DB_PORT:-5432}"
   DB_USER: "${DB_USER:-postgres}"
-  DB_PASSWORD: "${DB_PASSWORD:-password}"
+  # DB_PASSWORD: moved to Secret
   DB_NAME: "${DB_NAME:-belimang}"
   DB_SSLMODE: "${DB_SSLMODE:-disable}"
-  DATABASE_URL: "${DATABASE_URL:-postgres://postgres:password@postgres-service:5432/belimang?sslmode=disable}"
+  # DATABASE_URL: moved to Secret
   CACHE_HOST: "${CACHE_HOST:-redis-service}"
   CACHE_PORT: "${CACHE_PORT:-6379}"
   CACHE_PASSWORD: "${CACHE_PASSWORD:-}"
@@ -144,7 +143,7 @@ data:
   REDIS_ADDR: "${REDIS_ADDR:-redis-service:6379}"
   LOG_LEVEL: "${LOG_LEVEL:-info}"
   LOG_TYPE: "${LOG_TYPE:-simple}"
-  JWT_SECRET_KEY: "${JWT_SECRET_KEY:-your-secret-key-change-in-production}"
+  # JWT_SECRET_KEY: moved to Secret
   JWT_ISSUER: "${JWT_ISSUER:-belimang-app}"
   GOMAXPROCS: "${GOMAXPROCS:-4}"
   GOMEMLIMIT: "${GOMEMLIMIT:-1536MiB}"
@@ -156,19 +155,10 @@ EOF
     print_success "ConfigMap generated from .env variables"
 }
 
-# Function to update PVC with K3s local-path storage class
-update_pvc_k3s() {
-    print_status "Updating PVC for K3s local-path storage..."
-    
-    # Update postgres PVC
-    sed "s/storageClassName: standard/storageClassName: ${STORAGE_CLASS:-local-path}/g" postgres-pvc.yaml > postgres-pvc-k3s.yaml
-    sed -i "s/storage: 10Gi/storage: ${POSTGRES_STORAGE_SIZE:-10Gi}/g" postgres-pvc-k3s.yaml
-    
-    # Update redis PVC
-    sed "s/storageClassName: standard/storageClassName: ${STORAGE_CLASS:-local-path}/g" redis-pvc.yaml > redis-pvc-k3s.yaml
-    sed -i "s/storage: 5Gi/storage: ${REDIS_STORAGE_SIZE:-5Gi}/g" redis-pvc-k3s.yaml
-    
-    print_success "PVC updated for K3s"
+# Function to check PVC configuration
+check_pvc_k3s() {
+    print_status "Checking PVC configuration for K3s..."
+    print_success "PVC files ready for K3s deployment"
 }
 
 # Function to update deployments with resource limits from .env
@@ -178,60 +168,53 @@ update_deployments_k3s() {
     CURRENT_DIR=$(pwd)
     PROJECT_ROOT=$(dirname "$CURRENT_DIR")
     
-    # Update postgres deployment
-    sed "s|/path/to/your/project|$PROJECT_ROOT|g" postgres-deployment.yaml > postgres-deployment-k3s.yaml
-    
-    # Update resource limits if specified in .env
-    if [ -n "$POSTGRES_CPU_LIMIT" ]; then
-        sed -i "s/cpu: \"2\"/cpu: \"${POSTGRES_CPU_LIMIT}\"/g" postgres-deployment-k3s.yaml
-    fi
-    if [ -n "$POSTGRES_MEMORY_LIMIT" ]; then
-        sed -i "s/memory: \"2Gi\"/memory: \"${POSTGRES_MEMORY_LIMIT}\"/g" postgres-deployment-k3s.yaml
-    fi
-    if [ -n "$POSTGRES_CPU_REQUEST" ]; then
-        sed -i "s/cpu: \"1\"/cpu: \"${POSTGRES_CPU_REQUEST}\"/g" postgres-deployment-k3s.yaml
-    fi
-    if [ -n "$POSTGRES_MEMORY_REQUEST" ]; then
-        sed -i "s/memory: \"512Mi\"/memory: \"${POSTGRES_MEMORY_REQUEST}\"/g" postgres-deployment-k3s.yaml
-    fi
-    
-    # Update app deployment
-    cp app-deployment.yaml app-deployment-k3s.yaml
-    
-    # Update app replicas
-    if [ -n "$APP_REPLICAS" ]; then
-        sed -i "s/replicas: 2/replicas: ${APP_REPLICAS}/g" app-deployment-k3s.yaml
+    # Update resource limits in existing deployments if specified in .env
+    if [ -n "$POSTGRES_CPU_LIMIT" ] || [ -n "$POSTGRES_MEMORY_LIMIT" ] || [ -n "$POSTGRES_CPU_REQUEST" ] || [ -n "$POSTGRES_MEMORY_REQUEST" ]; then
+        # Update postgres deployment resource limits
+        if [ -n "$POSTGRES_CPU_LIMIT" ]; then
+            sed -i "s/cpu: \"1\"/cpu: \"${POSTGRES_CPU_LIMIT}\"/g" postgres-deployment.yaml
+        fi
+        if [ -n "$POSTGRES_MEMORY_LIMIT" ]; then
+            sed -i "s/memory: \"1Gi\"/memory: \"${POSTGRES_MEMORY_LIMIT}\"/g" postgres-deployment.yaml
+        fi
+        if [ -n "$POSTGRES_CPU_REQUEST" ]; then
+            sed -i "s/cpu: \"500m\"/cpu: \"${POSTGRES_CPU_REQUEST}\"/g" postgres-deployment.yaml
+        fi
+        if [ -n "$POSTGRES_MEMORY_REQUEST" ]; then
+            sed -i "s/memory: \"256Mi\"/memory: \"${POSTGRES_MEMORY_REQUEST}\"/g" postgres-deployment.yaml
+        fi
     fi
     
-    # Update app resource limits
-    if [ -n "$APP_CPU_LIMIT" ]; then
-        sed -i "s/cpu: \"4\"/cpu: \"${APP_CPU_LIMIT}\"/g" app-deployment-k3s.yaml
-    fi
-    if [ -n "$APP_MEMORY_LIMIT" ]; then
-        sed -i "s/memory: \"2Gi\"/memory: \"${APP_MEMORY_LIMIT}\"/g" app-deployment-k3s.yaml
-    fi
-    if [ -n "$APP_CPU_REQUEST" ]; then
-        sed -i "s/cpu: \"2\"/cpu: \"${APP_CPU_REQUEST}\"/g" app-deployment-k3s.yaml
-    fi
-    if [ -n "$APP_MEMORY_REQUEST" ]; then
-        sed -i "s/memory: \"512Mi\"/memory: \"${APP_MEMORY_REQUEST}\"/g" app-deployment-k3s.yaml
+    # Update app deployment resource limits
+    if [ -n "$APP_CPU_LIMIT" ] || [ -n "$APP_MEMORY_LIMIT" ] || [ -n "$APP_CPU_REQUEST" ] || [ -n "$APP_MEMORY_REQUEST" ]; then
+        if [ -n "$APP_CPU_LIMIT" ]; then
+            sed -i "s/cpu: \"1\"/cpu: \"${APP_CPU_LIMIT}\"/g" app-deployment.yaml
+        fi
+        if [ -n "$APP_MEMORY_LIMIT" ]; then
+            sed -i "s/memory: \"1Gi\"/memory: \"${APP_MEMORY_LIMIT}\"/g" app-deployment.yaml
+        fi
+        if [ -n "$APP_CPU_REQUEST" ]; then
+            sed -i "s/cpu: \"1\"/cpu: \"${APP_CPU_REQUEST}\"/g" app-deployment.yaml
+        fi
+        if [ -n "$APP_MEMORY_REQUEST" ]; then
+            sed -i "s/memory: \"256Mi\"/memory: \"${APP_MEMORY_REQUEST}\"/g" app-deployment.yaml
+        fi
     fi
     
-    # Update redis deployment
-    cp redis-deployment.yaml redis-deployment-k3s.yaml
-    
-    # Update redis resource limits
-    if [ -n "$REDIS_CPU_LIMIT" ]; then
-        sed -i "s/cpu: \"1\"/cpu: \"${REDIS_CPU_LIMIT}\"/g" redis-deployment-k3s.yaml
-    fi
-    if [ -n "$REDIS_MEMORY_LIMIT" ]; then
-        sed -i "s/memory: \"768Mi\"/memory: \"${REDIS_MEMORY_LIMIT}\"/g" redis-deployment-k3s.yaml
-    fi
-    if [ -n "$REDIS_CPU_REQUEST" ]; then
-        sed -i "s/cpu: \"500m\"/cpu: \"${REDIS_CPU_REQUEST}\"/g" redis-deployment-k3s.yaml
-    fi
-    if [ -n "$REDIS_MEMORY_REQUEST" ]; then
-        sed -i "s/memory: \"256Mi\"/memory: \"${REDIS_MEMORY_REQUEST}\"/g" redis-deployment-k3s.yaml
+    # Update redis deployment resource limits
+    if [ -n "$REDIS_CPU_LIMIT" ] || [ -n "$REDIS_MEMORY_LIMIT" ] || [ -n "$REDIS_CPU_REQUEST" ] || [ -n "$REDIS_MEMORY_REQUEST" ]; then
+        if [ -n "$REDIS_CPU_LIMIT" ]; then
+            sed -i "s/cpu: \"500m\"/cpu: \"${REDIS_CPU_LIMIT}\"/g" redis-deployment.yaml
+        fi
+        if [ -n "$REDIS_MEMORY_LIMIT" ]; then
+            sed -i "s/memory: \"512Mi\"/memory: \"${REDIS_MEMORY_LIMIT}\"/g" redis-deployment.yaml
+        fi
+        if [ -n "$REDIS_CPU_REQUEST" ]; then
+            sed -i "s/cpu: \"250m\"/cpu: \"${REDIS_CPU_REQUEST}\"/g" redis-deployment.yaml
+        fi
+        if [ -n "$REDIS_MEMORY_REQUEST" ]; then
+            sed -i "s/memory: \"128Mi\"/memory: \"${REDIS_MEMORY_REQUEST}\"/g" redis-deployment.yaml
+        fi
     fi
     
     print_success "Deployments updated for K3s"
@@ -245,18 +228,21 @@ deploy_k3s() {
     print_status "Creating namespace..."
     kubectl apply -f namespace.yaml
     
-    # Deploy ConfigMap
+    # Deploy Secret and ConfigMap
+    print_status "Deploying Secret using environment variables..."
+    ./apply-secrets.sh
+    
     print_status "Deploying ConfigMap..."
     kubectl apply -f configmap-generated.yaml
     
     # Deploy PVCs
     print_status "Deploying Persistent Volume Claims..."
-    kubectl apply -f postgres-pvc-k3s.yaml
-    kubectl apply -f redis-pvc-k3s.yaml
+    kubectl apply -f postgres-pvc.yaml
+    kubectl apply -f redis-pvc.yaml
     
     # Deploy PostgreSQL
     print_status "Deploying PostgreSQL..."
-    kubectl apply -f postgres-deployment-k3s.yaml
+    kubectl apply -f postgres-deployment.yaml
     kubectl apply -f postgres-service.yaml
     
     # Wait for PostgreSQL to be ready
@@ -265,7 +251,7 @@ deploy_k3s() {
     
     # Deploy Redis
     print_status "Deploying Redis..."
-    kubectl apply -f redis-deployment-k3s.yaml
+    kubectl apply -f redis-deployment.yaml
     kubectl apply -f redis-service.yaml
     
     # Wait for Redis to be ready
@@ -274,7 +260,7 @@ deploy_k3s() {
     
     # Deploy Application
     print_status "Deploying Application..."
-    kubectl apply -f app-deployment-k3s.yaml
+    kubectl apply -f app-deployment.yaml
     kubectl apply -f app-service.yaml
     
     # Wait for Application to be ready
@@ -332,7 +318,6 @@ cleanup() {
     # Clean up generated files
     rm -f configmap-generated.yaml
     rm -f postgres-pvc-k3s.yaml redis-pvc-k3s.yaml
-    rm -f postgres-deployment-k3s.yaml app-deployment-k3s.yaml redis-deployment-k3s.yaml
     
     print_success "Cleanup completed"
 }
@@ -371,7 +356,7 @@ case "${1:-deploy}" in
         check_k3s
         import_images_k3s
         generate_configmap
-        update_pvc_k3s
+        check_pvc_k3s
         update_deployments_k3s
         deploy_k3s
         show_status

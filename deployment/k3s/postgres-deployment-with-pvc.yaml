@@ -15,10 +15,10 @@ spec:
       labels:
         app: postgres
     spec:
+      # Removed securityContext for K3s compatibility
       containers:
         - name: postgres
-          image: belimang-postgres:latest
-          imagePullPolicy: Never
+          image: postgres:18-alpine
           ports:
             - containerPort: 5432
           env:
@@ -34,46 +34,15 @@ spec:
                   key: DB_USER
             - name: POSTGRES_PASSWORD
               valueFrom:
-                configMapKeyRef:
-                  name: belimang-config
+                secretKeyRef:
+                  name: belimang-secret
                   key: DB_PASSWORD
-            - name: POSTGRES_INITDB_ARGS
-              value: "--data-checksums"
-          args:
-            - "postgres"
-            - "-c"
-            - "shared_buffers=256MB"
-            - "-c"
-            - "max_connections=200"
-            - "-c"
-            - "effective_cache_size=1GB"
-            - "-c"
-            - "maintenance_work_mem=64MB"
-            - "-c"
-            - "checkpoint_completion_target=0.9"
-            - "-c"
-            - "wal_buffers=16MB"
-            - "-c"
-            - "default_statistics_target=100"
-            - "-c"
-            - "random_page_cost=1.1"
-            - "-c"
-            - "effective_io_concurrency=200"
-            - "-c"
-            - "work_mem=2MB"
-            - "-c"
-            - "min_wal_size=1GB"
-            - "-c"
-            - "max_wal_size=4GB"
+            - name: PGDATA
+              value: "/var/lib/postgresql/data/pgdata"
+          # Use default postgres configuration for K3s
           volumeMounts:
             - name: postgres-storage
               mountPath: /var/lib/postgresql/data
-            - name: migrations
-              mountPath: /docker-entrypoint-initdb.d
-              readOnly: true
-            - name: seeds
-              mountPath: /seeds
-              readOnly: true
           livenessProbe:
             exec:
               command:
@@ -100,20 +69,13 @@ spec:
             failureThreshold: 5
           resources:
             limits:
-              cpu: "2"
-              memory: "2Gi"
-            requests:
               cpu: "1"
-              memory: "512Mi"
+              memory: "1Gi"
+            requests:
+              cpu: "500m"
+              memory: "256Mi"
+          # Removed container securityContext for K3s compatibility
       volumes:
         - name: postgres-storage
           persistentVolumeClaim:
             claimName: postgres-pvc
-        - name: migrations
-          hostPath:
-            path: /path/to/your/project/migrations
-            type: Directory
-        - name: seeds
-          hostPath:
-            path: /path/to/your/project/seeds
-            type: Directory
