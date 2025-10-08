@@ -52,6 +52,23 @@ func NewRedisCache(config config.CacheConfig) *RedisCache {
 		Addr:     config.RedisUrl,
 		Password: config.Password,
 		DB:       config.DB,
+		
+		// Connection pool optimization for 60k RPS
+		PoolSize:        50,                    // Max connections per CPU (was default 10*runtime.GOMAXPROCS)
+		MinIdleConns:    10,                    // Keep warm connections (was default 0)
+		MaxIdleConns:    20,                    // Max idle connections (was default 0)
+		ConnMaxIdleTime: 5 * time.Minute,      // Close idle connections after 5min
+		ConnMaxLifetime: 30 * time.Minute,     // Recycle connections every 30min
+		
+		// Timeout optimization for high load
+		DialTimeout:  2 * time.Second,         // Connection timeout (was default 5s)
+		ReadTimeout:  1 * time.Second,         // Read timeout (was default 3s)  
+		WriteTimeout: 1 * time.Second,         // Write timeout (was default ReadTimeout)
+		
+		// Retry configuration for reliability
+		MaxRetries:      2,                    // Retry failed commands (was default 3)
+		MinRetryBackoff: 8 * time.Millisecond, // Min retry delay (was default 8ms)
+		MaxRetryBackoff: 32 * time.Millisecond, // Max retry delay (was default 512ms)
 	})
 
 	// Test connection

@@ -7,6 +7,18 @@ RUN apt-get update && \
     postgresql-18-h3 && \
     rm -rf /var/lib/apt/lists/*
 
+# Add custom PostgreSQL configuration for performance
+RUN echo "# Performance optimizations" >> /usr/share/postgresql/postgresql.conf.sample && \
+    echo "io_method = 'io_uring'" >> /usr/share/postgresql/postgresql.conf.sample && \
+    echo "shared_buffers = '1GB'" >> /usr/share/postgresql/postgresql.conf.sample && \
+    echo "effective_cache_size = '4GB'" >> /usr/share/postgresql/postgresql.conf.sample && \
+    echo "maintenance_work_mem = '256MB'" >> /usr/share/postgresql/postgresql.conf.sample && \
+    echo "checkpoint_completion_target = 0.9" >> /usr/share/postgresql/postgresql.conf.sample && \
+    echo "wal_buffers = '16MB'" >> /usr/share/postgresql/postgresql.conf.sample && \
+    echo "default_statistics_target = 100" >> /usr/share/postgresql/postgresql.conf.sample && \
+    echo "random_page_cost = 1.1" >> /usr/share/postgresql/postgresql.conf.sample && \
+    echo "effective_io_concurrency = 200" >> /usr/share/postgresql/postgresql.conf.sample
+
 # Stage 2: Go builder with CGO enabled
 FROM golang:1.25-bookworm AS builder
 

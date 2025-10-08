@@ -1,235 +1,201 @@
-# Belimang Deployment
+# Belimang Deployment Guide
 
-This directory contains deployment configurations for Belimang application with two deployment strategies:
+This directory contains deployment configurations for the Belimang application optimized for production environments.
+
+## Deployment Options
+
+### 1. Helm Charts (Production) - Recommended
+
+- **Location**: `helm/`
+- **Use case**: Production Kubernetes deployments
+- **Features**: Templated configurations, auto database initialization, optimized for 60k RPS
+- **Target**: 7 Core, 21GB RAM server with machinist-belimang-airmata namespace
+
+### 2. Docker Compose (Development)
+
+- **Location**: Root directory (`compose.dev.yaml`, `compose.yaml`)
+- **Use case**: Local development and testing
+- **Features**: Hot reload, easy debugging, minimal resource usage
 
 ## Directory Structure
 
 ```
 deployment/
-├── k8s/                    # Production Kubernetes deployment
-│   ├── deploy.sh           # K8s deployment script
-│   ├── app-deployment.yaml # Application deployment (2 replicas, 3 CPU, 4Gi RAM)
-│   ├── postgres-deployment.yaml # PostgreSQL with H3 extension (4 CPU, 12Gi RAM)
-│   ├── redis-deployment.yaml    # Redis deployment (2 CPU, 6Gi RAM)
-│   ├── postgres-pvc.yaml   # PostgreSQL PVC (50Gi)
-│   ├── redis-pvc.yaml      # Redis PVC (20Gi)
-│   ├── .env.example        # Production environment template
-│   └── shared files...     # Services, secrets, configmaps
+├── helm/                   # Helm charts for production deployment
+│   ├── templates/          # Kubernetes manifest templates
+│   ├── files/             # SQL initialization scripts
+│   ├── Chart.yaml         # Helm chart metadata
+│   └── values.yaml        # Configuration values
 │
-├── k3s/                    # Local development deployment
-│   ├── deploy.sh           # K3s deployment script
-│   ├── app-deployment.yaml # Application deployment (1 replica, 1 CPU, 1Gi RAM)
-│   ├── postgres-deployment.yaml # PostgreSQL 18 with io_uring (1 CPU, 1Gi RAM)
-│   ├── redis-deployment.yaml    # Redis deployment (500m CPU, 512Mi RAM)
-│   ├── postgres-pvc.yaml   # PostgreSQL PVC (2Gi)
-│   ├── redis-pvc.yaml      # Redis PVC (1Gi)
-│   ├── .env.example        # Development environment template
-│   └── shared files...     # Services, secrets, configmaps
-│
-└── README.md               # This file
+├── k8s/                   # Raw Kubernetes manifests (legacy)
+├── k3s/                   # K3s development deployment (legacy)
+├── machinist.kubeconfig   # Kubernetes cluster configuration
+└── README.md              # This file
 ```
 
 ## Quick Start
 
-### K3s (Local Development)
+### Helm (Production)
 
-1. **Setup environment**:
+1. **Deploy**:
 
    ```bash
-   cp deployment/k3s/.env.example deployment/k3s/.env
-   # Edit deployment/k3s/.env with your local settings
+   make helm-install
    ```
 
-2. **Deploy**:
+2. **Check status**:
 
    ```bash
-   make k3s-deploy
+   make helm-status
+   kubectl get pods -n machinist-belimang-airmata
    ```
 
-3. **Access application**:
+3. **Upgrade**:
 
    ```bash
-   # Application will be available at the K3s LoadBalancer IP
-   kubectl get services -n belimang
-   ```
-
-4. **Cleanup**:
-   ```bash
-   make k3s-cleanup
-   ```
-
-### K8s (Production)
-
-1. **Setup environment**:
-
-   ```bash
-   cp deployment/k8s/.env.example deployment/k8s/.env
-   # Edit deployment/k8s/.env with your production settings
-   ```
-
-2. **Build and push images**:
-
-   ```bash
-   make deploy-images REGISTRY_USER=your-dockerhub-username
-   ```
-
-3. **Deploy**:
-
-   ```bash
-   make k8s-deploy REGISTRY_USER=your-dockerhub-username
+   make helm-upgrade
    ```
 
 4. **Cleanup**:
    ```bash
-   make k8s-cleanup
+   make helm-uninstall
    ```
 
 ## Resource Requirements
 
-### K3s (Local Development)
-
-- **Target**: Local development machine
-- **Total Resources**: ~2.5 CPU, ~2.5Gi RAM, ~3Gi storage
-- **PostgreSQL**: 1 CPU, 1Gi RAM, 2Gi storage
-- **Redis**: 500m CPU, 512Mi RAM, 1Gi storage
-- **Application**: 1 CPU, 1Gi RAM, 1 replica
-
-### K8s (Production - 7 Core, 21GB RAM)
+### Helm Production (7 Core, 21GB RAM)
 
 - **Target**: Production server (7 Core, 21GB RAM)
-- **Total Resources**: ~9 CPU, ~22Gi RAM, ~70Gi storage
-- **PostgreSQL**: 4 CPU, 12Gi RAM, 50Gi storage
-- **Redis**: 2 CPU, 6Gi RAM, 20Gi storage
-- **Application**: 3 CPU, 4Gi RAM, 2 replicas
+- **Namespace**: machinist-belimang-airmata
+- **PostgreSQL**: 2.5 CPU, 8Gi RAM, 50Gi storage (arfiansr/belimang-postgres with PostGIS)
+- **Redis**: 1 CPU, 4Gi RAM, 20Gi storage
+- **Application**: 3-4 replicas, 1.5 CPU each, 1.5Gi RAM each (HPA enabled)
+- **Total**: Optimized for 60k RPS throughput
 
-## Key Differences
+## Key Features
 
-| Feature            | K3s (Development)                       | K8s (Production)                            |
-| ------------------ | --------------------------------------- | ------------------------------------------- |
-| **Image Strategy** | Local images (`imagePullPolicy: Never`) | Registry images (`imagePullPolicy: Always`) |
-| **Storage**        | local-path provisioner                  | Production storage class                    |
-| **PostgreSQL**     | Standard postgres:18-alpine             | Custom postgres with H3 extension           |
-| **Replicas**       | 1 (single instance)                     | 2 (high availability)                       |
-| **Resources**      | Minimal (development)                   | Optimized for 7-core server                 |
-| **Environment**    | Development settings                    | Production settings                         |
-| **Logging**        | Debug level, simple format              | Info level, JSON format                     |
+### Helm Production Deployment
 
-## Environment Variables
+- **Auto Database Initialization**: SQL scripts automatically executed via initdb ConfigMap
+- **PostGIS Support**: Custom PostgreSQL image with PostGIS and H3 extensions
+- **HPA Enabled**: Horizontal Pod Autoscaler for application scaling (3-4 replicas)
+- **Resource Optimized**: Configured for 60k RPS on 7 Core, 21GB RAM server
+- **Production Ready**: Optimized PostgreSQL configuration with io_uring
 
-Both deployments use `.env` files with different default values:
+### Database Schema
 
-### Common Variables
+The deployment automatically creates the following tables:
 
-- `ENV`: Environment (development/production)
-- `DATABASE_URL`: PostgreSQL connection string
-- `REDIS_ADDR`: Redis connection address
-- `JWT_SECRET_KEY`: JWT signing key
-- `GOMAXPROCS`: Go runtime CPU limit
-
-### K3s Specific
-
-- `K3S_NODE_IP`: K3s node IP address
-- `STORAGE_CLASS=local-path`: K3s storage class
-
-### K8s Specific
-
-- `REGISTRY`: Docker registry URL
-- `REGISTRY_USER`: Docker registry username
-- `STORAGE_CLASS=fast-ssd`: Production storage class
+- `users` - User management
+- `merchants` - Merchant information
+- `items` - Product catalog
+- `estimates` - Price estimates
+- `orders` - Order management
+- `order_merchants` - Order-merchant relationships
+- `order_items` - Order line items
 
 ## Monitoring
 
 ### Check Deployment Status
 
 ```bash
-# For both K3s and K8s
-kubectl get all -n belimang
-kubectl get pvc -n belimang
+# Check all resources
+kubectl get all -n machinist-belimang-airmata
+
+# Check persistent volumes
+kubectl get pvc -n machinist-belimang-airmata
+
+# Check HPA status
+kubectl get hpa -n machinist-belimang-airmata
 ```
 
 ### View Logs
 
 ```bash
 # Application logs
-kubectl logs -n belimang deployment/belimang-app-deployment -f
+kubectl logs -n machinist-belimang-airmata deployment/belimang -f
 
 # PostgreSQL logs
-kubectl logs -n belimang deployment/postgres-deployment -f
+kubectl logs -n machinist-belimang-airmata deployment/belimang-postgresql -f
 
 # Redis logs
-kubectl logs -n belimang deployment/redis-deployment -f
+kubectl logs -n machinist-belimang-airmata deployment/belimang-redis -f
 ```
 
 ### Health Checks
 
 ```bash
 # Check application health
-kubectl get pods -n belimang
-curl http://<service-ip>/healthz
+kubectl get pods -n machinist-belimang-airmata
+
+# Port forward for local testing
+kubectl port-forward service/belimang 8080:80 -n machinist-belimang-airmata
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Image Pull Errors (K8s)**:
+1. **Pod Not Starting**:
 
-   - Ensure images are pushed to registry
-   - Check registry credentials
-   - Verify image names in deployment files
+   - Check pod status: `kubectl get pods -n machinist-belimang-airmata`
+   - Describe pod: `kubectl describe pod <pod-name> -n machinist-belimang-airmata`
+   - Check events: `kubectl get events -n machinist-belimang-airmata --sort-by='.lastTimestamp'`
 
-2. **Storage Issues**:
+2. **Database Connection Issues**:
 
-   - Check if storage class exists
-   - Verify PVC status: `kubectl get pvc -n belimang`
-   - Check available storage space
+   - Verify PostgreSQL pod is running
+   - Check database logs: `kubectl logs deployment/belimang-postgresql -n machinist-belimang-airmata`
+   - Verify initdb scripts executed: `kubectl exec -n machinist-belimang-airmata <postgres-pod> -- ls -la /docker-entrypoint-initdb.d/`
 
 3. **Resource Constraints**:
-
-   - Monitor resource usage: `kubectl top pods -n belimang`
-   - Adjust resource limits in deployment files
+   - Monitor resource usage: `kubectl top pods -n machinist-belimang-airmata`
+   - Check HPA status: `kubectl get hpa -n machinist-belimang-airmata`
    - Check node capacity: `kubectl describe nodes`
-
-4. **Health Check Failures**:
-   - Check application logs
-   - Verify `/healthz` endpoint is accessible
-   - Adjust health check timeouts if needed
 
 ### Debug Commands
 
 ```bash
-# Describe problematic pod
-kubectl describe pod <pod-name> -n belimang
+# Check database tables
+kubectl exec -n machinist-belimang-airmata <postgres-pod> -- psql -U postgres -d belimang -c "\dt"
 
-# Get events
-kubectl get events -n belimang --sort-by='.lastTimestamp'
+# Test database connection
+kubectl exec -n machinist-belimang-airmata <app-pod> -- /app/server health
 
-# Port forward for local access
-kubectl port-forward service/belimang-app-service 8080:80 -n belimang
+# Port forward for local testing
+kubectl port-forward service/belimang 8080:80 -n machinist-belimang-airmata
 ```
 
 ## Security
 
-Both deployments include:
+Helm deployment includes:
 
-- Non-root containers with specific user IDs
-- Security contexts with capability dropping
-- Read-only root filesystems where possible
-- Secret management for sensitive data
-- Network policies (if supported by cluster)
+- Non-root containers with security contexts
+- Secret management for database credentials
+- Resource limits and requests
+- Health checks and readiness probes
+- Network policies ready configuration
 
 ## Scaling
 
-### K3s
+### Horizontal Pod Autoscaler (HPA)
 
-- Designed for single-node development
-- Scaling not typically needed
+The deployment includes HPA configuration:
 
-### K8s
+```bash
+# Check HPA status
+kubectl get hpa -n machinist-belimang-airmata
 
-- Horizontal scaling supported:
-  ```bash
-  kubectl scale deployment belimang-app-deployment --replicas=4 -n belimang
-  ```
-- Vertical scaling by adjusting resource limits
-- Database scaling requires additional configuration
+# Manual scaling (if needed)
+kubectl scale deployment belimang --replicas=4 -n machinist-belimang-airmata
+
+# Check scaling events
+kubectl describe hpa belimang -n machinist-belimang-airmata
+```
+
+### Performance Tuning
+
+- **CPU**: Optimized for 60k RPS with 3-4 replicas
+- **Memory**: 1.5Gi per replica with efficient Go memory management
+- **Database**: PostgreSQL with io_uring and optimized configuration
+- **Caching**: Redis for session and query result caching

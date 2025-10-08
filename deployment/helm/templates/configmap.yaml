@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "belimang.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "belimang.labels" . | nindent 4 }}
+data:
+  ENV: {{ .Values.app.env.ENV | quote }}
+  GIN_MODE: {{ .Values.app.env.GIN_MODE | quote }}
+  HTTP_PORT: {{ .Values.app.env.HTTP_PORT | quote }}
+  LOG_LEVEL: {{ .Values.app.env.LOG_LEVEL | quote }}
+  LOG_TYPE: {{ .Values.app.env.LOG_TYPE | quote }}
+  JWT_ISSUER: {{ .Values.secrets.jwt.issuer | quote }}
+  GOMAXPROCS: {{ .Values.app.env.GOMAXPROCS | quote }}
+  GOMEMLIMIT: {{ .Values.app.env.GOMEMLIMIT | quote }}
+  GODEBUG: {{ .Values.app.env.GODEBUG | quote }}
+  GOCACHE: {{ .Values.app.env.GOCACHE | quote }}
+  GOTMPDIR: {{ .Values.app.env.GOTMPDIR | quote }}
+  REDIS_ADDR: {{ include "belimang.redisAddr" . | quote }}
+  CACHE_HOST: {{ .Values.configMap.cache.host | quote }}
+  CACHE_PORT: {{ .Values.configMap.cache.port | quote }}
+  CACHE_PASSWORD: {{ .Values.configMap.cache.password | quote }}
+  CACHE_DB: {{ .Values.configMap.cache.db | quote }}

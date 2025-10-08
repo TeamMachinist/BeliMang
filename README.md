@@ -1,18 +1,15 @@
 # Belimang Application
 
-Belimang adalah aplikasi geospatial e-commerce yang dibangun dengan Go, menggunakan PostgreSQL 18 dengan ekstensi H3 untuk geospatial operations dan Redis untuk caching. Aplikasi ini mendukung multiple deployment strategies untuk development dan production.
+Belimang adalah aplikasi geospatial e-commerce yang dibangun dengan Go, menggunakan PostgreSQL 18 dengan ekstensi PostGIS dan H3 untuk geospatial operations dan Redis untuk caching. Aplikasi ini menggunakan Helm untuk deployment production.
 
 ## 🚀 Quick Start
 
 ```bash
-# Setup environment untuk K3s development
-cp .env.example.k3s .env
-
-# Deploy ke K3s (local development)
-make k3s-deploy
+# Deploy production environment dengan Helm
+make helm-install
 
 # Akses aplikasi
-curl http://$(kubectl get service belimang-app-service -n belimang -o jsonpath='{.status.loadBalancer.ingress[0].ip}')/healthz
+kubectl get pods -n machinist-belimang-airmata
 ```
 
 ## 📋 Prasyarat
@@ -34,6 +31,7 @@ curl http://$(kubectl get service belimang-app-service -n belimang -o jsonpath='
 │   ├── middleware/       # HTTP middleware
 │   └── pkg/              # Utilities dan packages
 ├── deployment/           # Deployment configurations
+│   ├── helm/            # Helm charts untuk production
 │   ├── k3s/             # K3s local development
 │   ├── k8s/             # Kubernetes production
 │   └── README.md        # Deployment documentation
@@ -79,36 +77,23 @@ Untuk panduan lengkap, lihat [Deployment Documentation](deployment/README.md)
 
 ## 🛠️ Deployment Options
 
-### 1. K3s (Local Development) - Recommended
+### 1. Helm (Production) - Recommended
 
 ```bash
-# Setup environment
-cp .env.example.k3s .env
+# Deploy production environment
+make helm-install
 
-# Deploy
-make k3s-deploy
+# Upgrade deployment
+make helm-upgrade
 
-# Cleanup
-make k3s-cleanup
+# Uninstall
+make helm-uninstall
+
+# Check status
+make helm-status
 ```
 
-### 2. K8s (Production)
-
-```bash
-# Setup environment
-cp .env.example.k8s .env
-
-# Build dan push images
-make deploy-images REGISTRY_USER=your-dockerhub-username
-
-# Deploy
-make k8s-deploy REGISTRY_USER=your-dockerhub-username
-
-# Cleanup
-make k8s-cleanup
-```
-
-### 3. Docker Compose (Alternative)
+### 2. Docker Compose (Development)
 
 ```bash
 # Development
@@ -149,91 +134,49 @@ make down-prod
 
 ```bash
 # Cek status deployment
-kubectl get all -n belimang
+kubectl get all -n machinist-belimang-airmata
 
 # Cek resource usage
-kubectl top pods -n belimang
+kubectl top pods -n machinist-belimang-airmata
 
 # Cek logs aplikasi
-kubectl logs -f deployment/belimang-app-deployment -n belimang
+kubectl logs -f deployment/belimang -n machinist-belimang-airmata
 ```
 
 ### Health Checks
 
 ```bash
 # Test aplikasi health
-curl http://$(kubectl get service belimang-app-service -n belimang -o jsonpath='{.status.loadBalancer.ingress[0].ip}')/healthz
+kubectl get pods -n machinist-belimang-airmata
 
 # Port forward untuk akses lokal
-kubectl port-forward service/belimang-app-service 8080:80 -n belimang
+kubectl port-forward service/belimang 8080:80 -n machinist-belimang-airmata
 ```
 
 ### Scaling Operations
 
 ```bash
 # Scale aplikasi
-kubectl scale deployment belimang-app-deployment --replicas=3 -n belimang
+kubectl scale deployment belimang --replicas=4 -n machinist-belimang-airmata
 
 # Update aplikasi
-kubectl set image deployment/belimang-app-deployment belimang-app=belimang-app:v2 -n belimang
+kubectl set image deployment/belimang belimang=arfiansr/belimang-app:v2 -n machinist-belimang-airmata
 
 # Rollback jika diperlukan
-kubectl rollout undo deployment/belimang-app-deployment -n belimang
+kubectl rollout undo deployment/belimang -n machinist-belimang-airmata
 ```
 
-### Monitoring Kubernetes Deployment
+### Database Management
 
 ```bash
-# Cek status pods
-kubectl get pods -n belimang
-
-# Cek status services
-kubectl get services -n belimang
-
-# Cek logs aplikasi
-kubectl logs -f deployment/belimang-app-deployment -n belimang
+# Cek tabel database
+kubectl exec -n machinist-belimang-airmata belimang-postgresql-xxx -- psql -U postgres -d belimang -c "\dt"
 
 # Cek logs PostgreSQL
-kubectl logs -f deployment/postgres-deployment -n belimang
+kubectl logs -f deployment/belimang-postgresql -n machinist-belimang-airmata
 
 # Cek logs Redis
-kubectl logs -f deployment/redis-deployment -n belimang
-
-# Describe pod untuk troubleshooting
-kubectl describe pod <pod-name> -n belimang
-```
-
-### Akses Aplikasi Kubernetes
-
-```bash
-# Port forward untuk akses lokal
-kubectl port-forward service/belimang-app-service 8080:80 -n belimang
-
-# Atau dapatkan external IP (jika LoadBalancer tersedia)
-kubectl get service belimang-app-service -n belimang
-```
-
-### Scaling Aplikasi
-
-```bash
-# Scale aplikasi ke 3 replicas
-kubectl scale deployment belimang-app-deployment --replicas=3 -n belimang
-
-# Cek status scaling
-kubectl get deployment belimang-app-deployment -n belimang
-```
-
-### Update Aplikasi
-
-```bash
-# Update image aplikasi
-kubectl set image deployment/belimang-app-deployment belimang-app=belimang-app:v2 -n belimang
-
-# Rollback jika diperlukan
-kubectl rollout undo deployment/belimang-app-deployment -n belimang
-
-# Cek status rollout
-kubectl rollout status deployment/belimang-app-deployment -n belimang
+kubectl logs -f deployment/belimang-redis -n machinist-belimang-airmata
 ```
 
 ## Troubleshooting

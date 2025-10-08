@@ -24,15 +24,16 @@ func NewDatabase(ctx context.Context, cfg string) (*DB, error) {
 		return nil, fmt.Errorf("failed to parse database URL: %w", err)
 	}
 
-	// Performance tuning for high RPS (58,900 total load test)
-	config.MaxConns = 30                       // Maximum connections
-	config.MinConns = 5                        // Keep warm connections
-	config.MaxConnLifetime = 1 * time.Hour     // Recycle connections
-	config.MaxConnIdleTime = 5 * time.Minute   // Close idle connections
-	config.HealthCheckPeriod = 1 * time.Minute // Regular health checks
+	// Performance tuning for high RPS (60k target)
+	// With 3-5 app pods, each pod needs ~40-50 connections for optimal performance
+	config.MaxConns = 50                       // Increased for 60k RPS (was 30)
+	config.MinConns = 15                       // More warm connections (was 5)
+	config.MaxConnLifetime = 30 * time.Minute  // Shorter recycle for high load (was 1h)
+	config.MaxConnIdleTime = 2 * time.Minute   // Faster cleanup of idle (was 5m)
+	config.HealthCheckPeriod = 30 * time.Second // More frequent health checks (was 1m)
 
-	// Connection timeout
-	config.ConnConfig.ConnectTimeout = 1 * time.Second
+	// Connection timeout - more lenient for high load
+	config.ConnConfig.ConnectTimeout = 3 * time.Second // Increased from 1s
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
