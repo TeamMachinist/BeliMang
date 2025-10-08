@@ -1,13 +1,13 @@
 package cache
 
 import (
+	logger "belimang/internal/pkg/logging"
 	"context"
 	"encoding/json"
 	"fmt"
-	logger "sinibeli/internal/pkg/logging"
 	"time"
 
-	"sinibeli/internal/config"
+	"belimang/internal/config"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -26,12 +26,14 @@ type CacheConfig struct {
 
 // Cache key constants for consistency
 const (
-	UserFileListKey = "user:files:%s"    // user:files:{userID}
-	FileMetadataKey = "file:metadata:%s" // file:metadata:{fileID}
-	FileExistsKey   = "file:exists:%s"   // file:exists:{fileID}
-	ProductListKey  = "products:list:%s" // products:list:{filters_hash}
-	ProductKey      = "product:%s"       // product:{productID}
-	UserProfileKey  = "user:profile:%s"  // user:profile:{userID}
+	UserFileListKey   = "user:files:%s"      // user:files:{userID}
+	FileMetadataKey   = "file:metadata:%s"   // file:metadata:{fileID}
+	FileExistsKey     = "file:exists:%s"     // file:exists:{fileID}
+	ProductListKey    = "products:list:%s"   // products:list:{filters_hash}
+	ProductKey        = "product:%s"         // product:{productID}
+	UserProfileKey    = "user:profile:%s"    // user:profile:{userID}
+	MerchantKey       = "merchant:%s"        // merchant:{merchantID}
+	MerchantExistsKey = "merchant:exists:%s" // merchant:exists:{merchantID}
 )
 
 // TTL constants for different data types
@@ -42,13 +44,31 @@ const (
 	ProductListTTL  = 10 * time.Minute // Product search results
 	ProductTTL      = 30 * time.Minute // Individual products
 	UserProfileTTL  = 15 * time.Minute // User profiles
+	MerchantTTL     = 30 * time.Minute // merchant:{merchantID}
 )
 
 func NewRedisCache(config config.CacheConfig) *RedisCache {
 	rdb := redis.NewClient(&redis.Options{
-		Addr:     fmt.Sprintf("%s:%d", config.Host, config.Port),
+		Addr:     config.RedisUrl,
 		Password: config.Password,
 		DB:       config.DB,
+		
+		// Connection pool optimization for 60k RPS
+		PoolSize:        50,                    // Max connections per CPU (was default 10*runtime.GOMAXPROCS)
+		MinIdleConns:    10,                    // Keep warm connections (was default 0)
+		MaxIdleConns:    20,                    // Max idle connections (was default 0)
+		ConnMaxIdleTime: 5 * time.Minute,      // Close idle connections after 5min
+		ConnMaxLifetime: 30 * time.Minute,     // Recycle connections every 30min
+		
+		// Timeout optimization for high load
+		DialTimeout:  2 * time.Second,         // Connection timeout (was default 5s)
+		ReadTimeout:  1 * time.Second,         // Read timeout (was default 3s)  
+		WriteTimeout: 1 * time.Second,         // Write timeout (was default ReadTimeout)
+		
+		// Retry configuration for reliability
+		MaxRetries:      2,                    // Retry failed commands (was default 3)
+		MinRetryBackoff: 8 * time.Millisecond, // Min retry delay (was default 8ms)
+		MaxRetryBackoff: 32 * time.Millisecond, // Max retry delay (was default 512ms)
 	})
 
 	// Test connection
@@ -66,25 +86,7 @@ func NewRedisCache(config config.CacheConfig) *RedisCache {
 
 // NewRedisCacheFromConfig creates a new Redis cache using the legacy CacheConfig struct
 // Deprecated: Use NewRedisCache instead
-func NewRedisCacheFromConfig(config CacheConfig) *RedisCache {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     config.Addr,
-		Password: config.Password,
-		DB:       config.DB,
-	})
-
-	// Test connection
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		logger.Error("Redis connection failed", "error", err, "addr", config.Addr)
-	} else {
-		logger.Info("Redis connected successfully", "addr", config.Addr, "db", config.DB)
-	}
-
-	return &RedisCache{client: rdb}
-}
+//
 
 func (c *RedisCache) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
 	jsonData, err := json.Marshal(value)
@@ -236,4 +238,8 @@ func (c *RedisCache) GetOrSet(ctx context.Context, key string, dest interface{},
 	// Copy data to destination
 	jsonData, _ := json.Marshal(data)
 	return json.Unmarshal(jsonData, dest)
+}
+
+func (c *RedisCache) Client() *redis.Client {
+	return c.client
 }

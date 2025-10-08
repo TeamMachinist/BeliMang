@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.gitlab-ci.yml
+
+# Documentation
+*.md
+docs/
+LICENSE
+
+# Development
+.env.example
+.env.local
+.air.toml
+tmp/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+*_test.go
+testdata/
+coverage.out
+*.test
+
+# Build artifacts
+bin/
+dist/
+build/
+
+# Dependencies (will be downloaded during build)
+vendor/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore

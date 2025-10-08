@@ -4,14 +4,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterRoutes registers user routes with the router
-func UserRoutes(router *gin.RouterGroup, handler *UserHandler) {
+func RegisterRoutes(router *gin.Engine, handler *UserHandler) {
 	users := router.Group("/users")
 	{
-		users.POST("/", handler.Create)
-		users.GET("/", handler.GetAll)
-		users.GET("/:id", handler.GetByID)
-		users.PUT("/:id", handler.Update)
-		users.DELETE("/:id", handler.Delete)
+		users.POST("/register", handler.RegisterUser)
+		users.POST("/login", handler.LoginUser)
+	}
+
+	admin := router.Group("/admin")
+	{
+		admin.POST("/register", handler.RegisterAdmin)
+		admin.POST("/login", handler.LoginAdmin)
 	}
 }

@@ -30,6 +30,7 @@ type DatabaseConfig struct {
 	Password string `json:"password"`
 	Database string `json:"database"`
 	SSLMode  string `json:"ssl_mode"`
+	DbUrl    string
 }
 
 // CacheConfig holds cache configuration
@@ -38,6 +39,7 @@ type CacheConfig struct {
 	Port     int    `json:"port"`
 	Password string `json:"password"`
 	DB       int    `json:"db"`
+	RedisUrl string
 }
 
 // LoggerConfig holds logger configuration
@@ -96,12 +98,14 @@ func LoadConfig(envPath string) (*Config, error) {
 			Password: getEnv("DB_PASSWORD", "password"),
 			Database: getEnv("DB_NAME", "belimang"),
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
+			DbUrl:    getEnv("DATABASE_URL", ""),
 		},
 		Cache: CacheConfig{
-			Host:     getEnv("CACHE_HOST", "localhost"),
+			Host:     getEnv("CACHE_HOST", "redis"),
 			Port:     cachePort,
 			Password: getEnv("CACHE_PASSWORD", ""),
 			DB:       cacheDB,
+			RedisUrl: getEnv("REDIS_ADDR", ""),
 		},
 		Logger: LoggerConfig{
 			Level: getEnv("LOG_LEVEL", "info"),

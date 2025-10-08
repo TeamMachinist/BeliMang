@@ -1,0 +1,172 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "belimang.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "belimang.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.app.replicaCount }}
+  {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: {{ if eq (.Values.app.replicaCount | int) 1 }}0{{ else }}1{{ end }}
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "belimang.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "belimang.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Always
+      securityContext:
+        runAsNonRoot: {{ .Values.app.securityContext.runAsNonRoot }}
+        runAsUser: {{ .Values.app.securityContext.runAsUser }}
+        runAsGroup: {{ .Values.app.securityContext.runAsGroup }}
+        fsGroup: {{ .Values.app.securityContext.fsGroup }}
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:18-alpine
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          command: ["/bin/sh"]
+          args:
+            - -c
+            - |
+              echo "Waiting for PostgreSQL to be ready..."
+              until pg_isready -h {{ include "belimang.fullname" . }}-postgresql -p 5432 -U {{ .Values.postgresql.auth.username }}; do
+                echo "PostgreSQL is not ready yet, waiting..."
+                sleep 2
+              done
+              echo "PostgreSQL is ready!"
+          env:
+            - name: PGUSER
+              value: {{ .Values.postgresql.auth.username }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "belimang.fullname" . }}-secret
+                  key: DB_PASSWORD
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+      containers:
+        - name: {{ .Values.app.name }}
+          image: "{{ .Values.app.image.registry }}/{{ .Values.app.image.repository }}:{{ .Values.app.image.tag }}"
+          imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.app.env.HTTP_PORT }}
+              protocol: TCP
+          env:
+            - name: ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "belimang.fullname" . }}-config
+                  key: ENV
+            - name: GIN_MODE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "belimang.fullname" . }}-config
+                  key: GIN_MODE
+            - name: HTTP_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "belimang.fullname" . }}-config
+                  key: HTTP_PORT
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "belimang.fullname" . }}-secret
+                  key: DATABASE_URL
+            - name: REDIS_ADDR
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "belimang.fullname" . }}-config
+                  key: REDIS_ADDR
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "belimang.fullname" . }}-secret
+                  key: JWT_SECRET_KEY
+            - name: JWT_ISSUER
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "belimang.fullname" . }}-config
+                  key: JWT_ISSUER
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "belimang.fullname" . }}-config
+                  key: LOG_LEVEL
+            - name: LOG_TYPE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "belimang.fullname" . }}-config
+                  key: LOG_TYPE
+            - name: GOMAXPROCS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "belimang.fullname" . }}-config
+                  key: GOMAXPROCS
+            - name: GOMEMLIMIT
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "belimang.fullname" . }}-config
+                  key: GOMEMLIMIT
+            - name: GODEBUG
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "belimang.fullname" . }}-config
+                  key: GODEBUG
+            - name: GOCACHE
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "belimang.fullname" . }}-config
+                  key: GOCACHE
+            - name: GOTMPDIR
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "belimang.fullname" . }}-config
+                  key: GOTMPDIR
+          livenessProbe:
+            {{- toYaml .Values.app.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.app.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.app.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: {{ .Values.app.securityContext.allowPrivilegeEscalation }}
+            readOnlyRootFilesystem: {{ .Values.app.securityContext.readOnlyRootFilesystem }}
+            capabilities:
+              drop:
+                {{- toYaml .Values.app.securityContext.capabilities.drop | nindent 16 }}
+              add:
+                {{- toYaml .Values.app.securityContext.capabilities.add | nindent 16 }}
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+            - name: go-cache-volume
+              mountPath: /tmp/go-cache
+            - name: go-tmp-volume
+              mountPath: /tmp/go-tmp
+      volumes:
+        - name: tmp-volume
+          emptyDir:
+            sizeLimit: {{ if eq .Values.app.env.ENV "production" }}4Gi{{ else }}2Gi{{ end }}
+        - name: go-cache-volume
+          emptyDir:
+            sizeLimit: {{ if eq .Values.app.env.ENV "production" }}2Gi{{ else }}1Gi{{ end }}
+        - name: go-tmp-volume
+          emptyDir:
+            sizeLimit: {{ if eq .Values.app.env.ENV "production" }}2Gi{{ else }}1Gi{{ end }}
+        - name: migrations-volume
+          configMap:
+            name: {{ include "belimang.fullname" . }}-migrations

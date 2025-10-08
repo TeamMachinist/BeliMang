@@ -5,69 +5,40 @@ import (
 	"time"
 )
 
+type UserRole string
+
+const (
+	UserRoleUser  UserRole = "user"
+	UserRoleAdmin UserRole = "admin"
+)
+
 // User represents the user entity in the domain
 type User struct {
 	ID        string    `json:"id" db:"id"`
+	Username  string    `json:"username" db:"username"`
+	Password  string    `json:"-" db:"password"`
 	Email     string    `json:"email" db:"email"`
-	Name      string    `json:"name" db:"name"`
-	Password  string    `json:"-" db:"password_hash"`
+	Role      UserRole  `json:"role" db:"role"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
-// CreateUserRequest represents the request payload for creating a user
-type CreateUserRequest struct {
+// RegisterRequest represents the request payload for registering a user
+type RegisterRequest struct {
+	Username string `json:"username" validate:"required,min=5,max=30"`
+	Password string `json:"password" validate:"required,min=5,max=30"`
 	Email    string `json:"email" validate:"required,email"`
-	Name     string `json:"name" validate:"required,min=2,max=100"`
-	Password string `json:"password" validate:"required,min=8"`
 }
 
-// UpdateUserRequest represents the request payload for updating a user
-type UpdateUserRequest struct {
-	Email string `json:"email,omitempty" validate:"omitempty,email"`
-	Name  string `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
+// LoginRequest represents the request payload for user login
+type LoginRequest struct {
+	Username string `json:"username" validate:"required,min=5,max=30"`
+	Password string `json:"password" validate:"required,min=5,max=30"`
 }
 
-// UserResponse represents the response payload for user operations
-type UserResponse struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+// AuthResponse represents the response payload for auth operations
+type AuthResponse struct {
+	Token string `json:"token"`
 }
-
-// ListUsersResponse represents the response payload for listing users
-type ListUsersResponse struct {
-	Users  []*UserResponse `json:"users"`
-	Total  int             `json:"total"`
-	Limit  int             `json:"limit"`
-	Offset int             `json:"offset"`
-}
-
-// ToResponse converts a User entity to UserResponse DTO
-func (u *User) ToResponse() *UserResponse {
-	return &UserResponse{
-		ID:        u.ID,
-		Email:     u.Email,
-		Name:      u.Name,
-		CreatedAt: u.CreatedAt,
-		UpdatedAt: u.UpdatedAt,
-	}
-}
-
-// Domain errors for user operations
-var (
-	ErrUserNotFound      = errors.New("user not found")
-	ErrUserAlreadyExists = errors.New("user already exists")
-	ErrInvalidEmail      = errors.New("invalid email format")
-	ErrInvalidPassword   = errors.New("invalid password")
-	ErrInvalidUserID     = errors.New("invalid user ID")
-	ErrEmptyUserName     = errors.New("user name cannot be empty")
-	ErrUserNameTooShort  = errors.New("user name is too short")
-	ErrUserNameTooLong   = errors.New("user name is too long")
-	ErrPasswordTooShort  = errors.New("password is too short")
-)
 
 // ErrorResponse represents the structure for error responses
 type ErrorResponse struct {
@@ -90,7 +61,15 @@ type ValidationErrorResponse struct {
 	Errors  []ValidationError `json:"errors"`
 }
 
-// NewErrorResponse creates a new error response
+// Domain errors
+var (
+	ErrUserNotFound       = errors.New("user not found")
+	ErrUsernameExists     = errors.New("username already exists")
+	ErrEmailExists        = errors.New("email already exists")
+	ErrInvalidCredentials = errors.New("invalid credentials")
+)
+
+// Response constructors
 func NewErrorResponse(err string, message string) *ErrorResponse {
 	return &ErrorResponse{
 		Error:   err,
@@ -98,7 +77,6 @@ func NewErrorResponse(err string, message string) *ErrorResponse {
 	}
 }
 
-// NewErrorResponseWithDetails creates a new error response with details
 func NewErrorResponseWithDetails(err string, message string, details map[string]string) *ErrorResponse {
 	return &ErrorResponse{
 		Error:   err,
@@ -107,7 +85,6 @@ func NewErrorResponseWithDetails(err string, message string, details map[string]
 	}
 }
 
-// NewValidationErrorResponse creates a new validation error response
 func NewValidationErrorResponse(message string, errors []ValidationError) *ValidationErrorResponse {
 	return &ValidationErrorResponse{
 		Error:   "validation_error",
