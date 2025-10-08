@@ -1,16 +1,26 @@
 # Belimang Application
 
-Aplikasi Belimang adalah sebuah aplikasi Go yang menggunakan PostgreSQL dengan ekstensi H3 dan Redis sebagai cache. Aplikasi ini dapat dijalankan dalam tiga cara berbeda: development mode, production mode dengan Docker Compose, dan deployment di Kubernetes dengan Docker registry.
+Belimang adalah aplikasi geospatial e-commerce yang dibangun dengan Go, menggunakan PostgreSQL 18 dengan ekstensi PostGIS dan H3 untuk geospatial operations dan Redis untuk caching. Aplikasi ini menggunakan Helm untuk deployment production.
 
-## Prasyarat
+## 🚀 Quick Start
 
-- Docker dan Docker Compose
-- Kubernetes cluster (untuk deployment K8s)
-- kubectl (untuk deployment K8s)
-- Docker Hub account atau registry lainnya (untuk K8s deployment)
-- Go 1.25+ (untuk development lokal)
+```bash
+# Deploy production environment dengan Helm
+make helm-install
 
-## Struktur Aplikasi
+# Akses aplikasi
+kubectl get pods -n machinist-belimang-airmata
+```
+
+## 📋 Prasyarat
+
+- **Docker & Docker Compose** - Untuk containerization
+- **K3s atau Kubernetes cluster** - Untuk deployment
+- **kubectl** - Kubernetes CLI
+- **Docker Hub account** (untuk K8s production) - Registry untuk images
+- **Go 1.25+** (optional) - Untuk development lokal
+
+## 🏗️ Struktur Aplikasi
 
 ```
 ├── cmd/                    # Entry point aplikasi
@@ -20,7 +30,11 @@ Aplikasi Belimang adalah sebuah aplikasi Go yang menggunakan PostgreSQL dengan e
 │   ├── infrastructure/   # Database, cache, dan infrastruktur
 │   ├── middleware/       # HTTP middleware
 │   └── pkg/              # Utilities dan packages
-├── k8s/                  # Kubernetes manifests
+├── deployment/           # Deployment configurations
+│   ├── helm/            # Helm charts untuk production
+│   ├── k3s/             # K3s local development
+│   ├── k8s/             # Kubernetes production
+│   └── README.md        # Deployment documentation
 ├── migrations/           # Database migrations
 ├── seeds/               # Database seed data
 ├── compose.yaml         # Production Docker Compose
@@ -29,599 +43,140 @@ Aplikasi Belimang adalah sebuah aplikasi Go yang menggunakan PostgreSQL dengan e
 └── Makefile            # Build automation
 ```
 
-## Konfigurasi Environment
+## ⚙️ Environment Configuration
 
-Salin file `.env.example` ke `.env` dan sesuaikan konfigurasi:
+Aplikasi menggunakan **centralized environment management** dengan file `.env` di root directory:
 
-```bash
-cp .env.example .env
+### Environment Files Structure
+
+```
+.env                    # Current environment (copy from examples below)
+.env.example           # Base example for local development
+.env.example.k3s       # K3s specific configuration
+.env.example.k8s       # K8s production configuration
 ```
 
-Edit file `.env` sesuai kebutuhan:
-
-```env
-# Environment Configuration
-ENV=development
-
-# Database Configuration
-DB_HOST=localhost
-DB_PORT=5000
-DB_USER=postgres
-DB_PASSWORD=password
-DB_NAME=belimang
-DB_SSLMODE=disable
-DATABASE_URL=postgres://postgres:password@postgres:5432/belimang?sslmode=disable
-
-# Server Configuration
-SERVER_HOST=localhost
-SERVER_PORT=8080
-
-# Cache Configuration
-CACHE_HOST=localhost
-CACHE_PORT=6000
-CACHE_PASSWORD=
-CACHE_DB=0
-REDIS_ADDR=redis:6379
-
-# Logger Configuration
-LOG_LEVEL=info
-LOG_TYPE=simple
-
-# JWT Configuration
-JWT_SECRET_KEY=your-secret-key-change-in-production
-JWT_ISSUER=belimang-app
-```
-
-## Quick Start dengan Makefile
-
-Gunakan Makefile untuk operasi yang lebih mudah:
+### Setup Environment
 
 ```bash
-# Lihat semua perintah yang tersedia
-make help
+# Untuk K3s development
+cp .env.example.k3s .env
 
+# Untuk K8s production
+cp .env.example.k8s .env
+
+# Edit .env dengan nilai yang sesuai
+```
+
+**🔒 Security Note**: Pastikan mengganti nilai sensitif:
+
+- `DB_PASSWORD` - Password database yang aman
+- `JWT_SECRET_KEY` - Secret key untuk JWT (minimum 32 karakter)
+
+Untuk panduan lengkap, lihat [Deployment Documentation](deployment/README.md)
+
+## 🛠️ Deployment Options
+
+### 1. Helm (Production) - Recommended
+
+```bash
+# Deploy production environment
+make helm-install
+
+# Upgrade deployment
+make helm-upgrade
+
+# Uninstall
+make helm-uninstall
+
+# Check status
+make helm-status
+```
+
+### 2. Docker Compose (Development)
+
+```bash
 # Development
-make up-dev-build    # Build dan start development environment
-make down-dev        # Stop development environment
+make up-dev-build
+make down-dev
 
 # Production
-make up-prod-build   # Build dan start production environment
-make down-prod       # Stop production environment
-
-# Docker Registry & Kubernetes
-make deploy-images REGISTRY_USER=your-username  # Build, push ke registry
-make k8s-deploy REGISTRY_USER=your-username     # Deploy ke Kubernetes
-
-# K3s (Lightweight Kubernetes)
-make k3s-deploy      # Deploy ke K3s menggunakan local images
-make k3s-cleanup     # Cleanup K3s deployment
+make up-prod-build
+make down-prod
 ```
 
-## 1. Development Mode (compose.dev.yaml)
+## 📊 Resource Allocation
 
-Mode development menggunakan hot reload dan volume mounting untuk development yang lebih cepat.
+### K3s (Local Development)
 
-### Menjalankan Development Mode
+- **PostgreSQL**: 1 CPU, 1Gi RAM, 2Gi storage
+- **Redis**: 500m CPU, 512Mi RAM, 1Gi storage
+- **App**: 1 CPU, 1Gi RAM, 1 replica
 
-```bash
-# Build dan jalankan semua services
-docker-compose -f compose.dev.yaml up --build
+### K8s (Production - 7 Core, 21GB RAM)
 
-# Atau jalankan di background
-docker-compose -f compose.dev.yaml up -d --build
+- **PostgreSQL**: 4 CPU, 12Gi RAM, 50Gi storage (dengan io_uring)
+- **Redis**: 2 CPU, 6Gi RAM, 20Gi storage
+- **App**: 3 CPU, 4Gi RAM, 2 replicas
 
-# Melihat logs
-docker-compose -f compose.dev.yaml logs -f
+## 🔧 Key Features
 
-# Stop services
-docker-compose -f compose.dev.yaml down
+- **Geospatial Operations**: PostGIS dengan H3 indexing untuk location-based queries
+- **Full-Text Search**: pg_trgm untuk optimized ILIKE operations
+- **Complex Queries**: Multi-table JOINs dengan distance calculations
+- **High Performance**: PostgreSQL 18 dengan io_uring untuk production
+- **Caching Layer**: Redis untuk session dan query result caching
+- **Scalable Architecture**: Horizontal scaling dengan Kubernetes
 
-# Stop dan hapus volumes
-docker-compose -f compose.dev.yaml down -v
-```
+## 🔍 Monitoring & Management
 
-### Fitur Development Mode
-
-- **Hot Reload**: Perubahan kode akan otomatis ter-reload
-- **Volume Mounting**: Source code di-mount ke container
-- **Debug Mode**: Logging lebih verbose
-- **Fast Build**: Build time lebih cepat untuk development
-
-### Akses Aplikasi Development
-
-- **Aplikasi**: http://localhost:8080
-- **PostgreSQL**: localhost:5000
-- **Redis**: localhost:6000
-
-## 2. Production Mode (compose.yaml)
-
-Mode production dengan optimasi performa dan keamanan.
-
-### Menjalankan Production Mode
-
-```bash
-# Build dan jalankan semua services
-docker-compose -f compose.yaml up --build
-
-# Atau jalankan di background
-docker-compose -f compose.yaml up -d --build
-
-# Melihat logs
-docker-compose -f compose.yaml logs -f
-
-# Stop services
-docker-compose -f compose.yaml down
-
-# Stop dan hapus volumes
-docker-compose -f compose.yaml down -v
-```
-
-### Fitur Production Mode
-
-- **Optimized Build**: Binary yang dioptimasi untuk production
-- **Security**: Non-root user, security constraints
-- **Performance Tuning**: PostgreSQL dan Redis dengan konfigurasi optimal
-- **Health Checks**: Health checks untuk semua services
-- **Resource Limits**: CPU dan memory limits
-- **Restart Policies**: Automatic restart on failure
-
-### Akses Aplikasi Production
-
-- **Aplikasi**: http://localhost:8080
-- **PostgreSQL**: localhost:5432
-- **Redis**: localhost:6379
-
-## 3. Kubernetes Deployment dengan Docker Registry
-
-Deployment di Kubernetes cluster menggunakan Docker registry untuk production-ready deployment dengan high availability dan scalability.
-
-### Workflow Docker Registry
-
-Kubernetes deployment menggunakan images dari Docker registry (Docker Hub, AWS ECR, Google GCR, dll.) untuk memastikan konsistensi dan kemudahan deployment.
-
-#### 1. Setup Docker Registry
-
-```bash
-# Login ke Docker Hub (atau registry lainnya)
-make docker-login
-
-# Atau manual
-docker login docker.io
-# Masukkan username dan password Docker Hub Anda
-```
-
-#### 2. Build dan Push Images ke Registry
-
-```bash
-# Build dan push dengan Makefile (recommended)
-make deploy-images REGISTRY_USER=your-dockerhub-username
-
-# Atau manual
-make build-images REGISTRY_USER=your-dockerhub-username
-make push-images REGISTRY_USER=your-dockerhub-username
-```
-
-Perintah ini akan:
-
-- Build image PostgreSQL dengan H3 extension
-- Build image aplikasi Go
-- Push kedua images ke registry dengan tag `latest`
-
-#### 3. Deploy ke Kubernetes
-
-```bash
-# Deploy otomatis dengan registry images
-make k8s-deploy REGISTRY_USER=your-dockerhub-username
-
-# Atau manual
-cd k8s
-./deploy.sh deploy
-```
-
-### Konfigurasi Environment Variables
-
-Kubernetes menggunakan ConfigMap untuk environment variables (bukan Secrets). Edit `k8s/configmap.yaml` untuk menyesuaikan konfigurasi:
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: belimang-config
-  namespace: belimang
-data:
-  ENV: "production"
-  DB_USER: "postgres"
-  DB_PASSWORD: "your-secure-password" # Ganti dengan password yang aman
-  JWT_SECRET_KEY: "your-jwt-secret" # Ganti dengan JWT secret yang aman
-  # ... konfigurasi lainnya
-```
-
-### Deployment Manual (Step by Step)
-
-Jika ingin deploy manual tanpa Makefile:
-
-1. **Update Path di postgres-deployment.yaml**
-
-Edit file `k8s/postgres-deployment.yaml` dan ganti path berikut dengan path absolut ke project Anda:
-
-```yaml
-volumes:
-  - name: migrations
-    hostPath:
-      path: /path/to/your/project/migrations # Ganti dengan path absolut
-      type: Directory
-  - name: seeds
-    hostPath:
-      path: /path/to/your/project/seeds # Ganti dengan path absolut
-      type: Directory
-```
-
-2. **Update Images di Deployment Files**
-
-Edit `k8s/postgres-deployment.yaml` dan `k8s/app-deployment.yaml`:
-
-```yaml
-# postgres-deployment.yaml
-spec:
-  template:
-    spec:
-      containers:
-      - name: postgres
-        image: your-dockerhub-username/belimang-postgres:latest
-        imagePullPolicy: Always
-
-# app-deployment.yaml
-spec:
-  template:
-    spec:
-      containers:
-      - name: belimang-app
-        image: your-dockerhub-username/belimang-app:latest
-        imagePullPolicy: Always
-```
-
-3. **Deploy Semua Komponen**
-
-```bash
-# Deploy namespace
-kubectl apply -f k8s/namespace.yaml
-
-# Deploy ConfigMap
-kubectl apply -f k8s/configmap.yaml
-
-# Deploy PersistentVolumeClaims
-kubectl apply -f k8s/postgres-pvc.yaml
-kubectl apply -f k8s/redis-pvc.yaml
-
-# Deploy PostgreSQL
-kubectl apply -f k8s/postgres-deployment.yaml
-kubectl apply -f k8s/postgres-service.yaml
-
-# Deploy Redis
-kubectl apply -f k8s/redis-deployment.yaml
-kubectl apply -f k8s/redis-service.yaml
-
-# Deploy Aplikasi
-kubectl apply -f k8s/app-deployment.yaml
-kubectl apply -f k8s/app-service.yaml
-```
-
-### Development vs Production Deployment
-
-#### Development (Local Images)
-
-Untuk development lokal dengan minikube/kind:
-
-```bash
-# Build images lokal
-docker build -t belimang-postgres:latest --target postgres-h3 .
-docker build -t belimang-app:latest --target production .
-
-# Load ke minikube/kind
-minikube image load belimang-postgres:latest belimang-app:latest
-# atau
-kind load docker-image belimang-postgres:latest belimang-app:latest
-
-# Deploy dengan images lokal
-cd k8s && ./deploy.sh deploy
-```
-
-#### Production (Registry Images)
-
-Untuk production dengan registry:
-
-```bash
-# Build dan push ke registry
-make deploy-images REGISTRY_USER=your-username
-
-# Deploy dengan registry images
-make k8s-deploy REGISTRY_USER=your-username
-```
-
-## 4. K3s Deployment (Lightweight Kubernetes)
-
-K3s adalah distribusi Kubernetes yang ringan, sempurna untuk development, edge computing, dan resource-constrained environments. K3s deployment menggunakan local images dan konfigurasi yang dioptimasi untuk single-node atau small cluster.
-
-### Prasyarat K3s
-
-```bash
-# Install K3s
-curl -sfL https://get.k3s.io | sh -
-
-# Atau dengan konfigurasi khusus
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--bind-address=0.0.0.0 --disable=traefik" sh -
-
-# Cek status K3s
-sudo systemctl status k3s
-
-# Setup kubectl untuk user biasa
-sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
-sudo chown $USER:$USER ~/.kube/config
-```
-
-### Konfigurasi Environment K3s
-
-1. **Setup Environment Variables**
-
-```bash
-# Copy dan edit file environment untuk K3s
-cd k8s
-cp .env.example .env
-```
-
-Edit file `k8s/.env` sesuai kebutuhan:
-
-```env
-# Application Environment
-ENV=production
-GIN_MODE=release
-HTTP_PORT=8080
-
-# Database Configuration
-DB_HOST=postgres-service
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=change-this-secure-password
-DB_NAME=belimang
-DATABASE_URL=postgres://postgres:change-this-secure-password@postgres-service:5432/belimang?sslmode=disable
-
-# JWT Configuration
-JWT_SECRET_KEY=change-this-jwt-secret-key-in-production
-
-# K3s Specific Configuration
-K3S_NODE_IP=192.168.1.100
-STORAGE_CLASS=local-path
-POSTGRES_STORAGE_SIZE=10Gi
-REDIS_STORAGE_SIZE=5Gi
-
-# Resource Configuration
-APP_REPLICAS=2
-POSTGRES_CPU_LIMIT=2
-POSTGRES_MEMORY_LIMIT=2Gi
-APP_CPU_LIMIT=4
-APP_MEMORY_LIMIT=2Gi
-```
-
-### Deploy ke K3s
-
-#### Quick Deploy dengan Makefile
-
-```bash
-# Deploy ke K3s (otomatis build images jika diperlukan)
-make k3s-deploy
-
-# Cleanup deployment
-make k3s-cleanup
-```
-
-#### Manual Deploy dengan Script
-
-```bash
-# Masuk ke directory k8s
-cd k8s
-
-# Deploy dengan script K3s
-./deploy-k3s.sh deploy
-
-# Cek status deployment
-./deploy-k3s.sh status
-
-# Cleanup deployment
-./deploy-k3s.sh cleanup
-```
-
-### Fitur K3s Deployment
-
-#### Automatic Image Import
-
-Script K3s otomatis:
-
-- Build Docker images jika belum ada
-- Import images ke K3s containerd runtime
-- Generate ConfigMap dari file `.env`
-- Update resource limits sesuai konfigurasi
-
-#### Local Path Storage
-
-K3s menggunakan `local-path` storage class yang:
-
-- Menyimpan data di node lokal
-- Tidak memerlukan external storage provider
-- Cocok untuk development dan testing
-
-#### Optimized Resource Usage
-
-- Resource limits disesuaikan dengan environment
-- Support untuk single-node deployment
-- Minimal overhead dibanding full Kubernetes
-
-### Akses Aplikasi K3s
+### Status Monitoring
 
 ```bash
 # Cek status deployment
-kubectl get pods -n belimang
-kubectl get services -n belimang
+kubectl get all -n machinist-belimang-airmata
 
-# Port forward untuk akses lokal
-kubectl port-forward service/belimang-app-service 8080:80 -n belimang
-
-# Akses aplikasi
-curl http://localhost:8080
-
-# Jika menggunakan LoadBalancer (K3s servicelb)
-kubectl get service belimang-app-service -n belimang
-# Akses via node IP dan port
-```
-
-### K3s vs Standard Kubernetes
-
-| Feature            | K3s                    | Standard K8s            |
-| ------------------ | ---------------------- | ----------------------- |
-| **Installation**   | Single binary, 5 menit | Complex, 30+ menit      |
-| **Memory Usage**   | ~512MB                 | ~2GB+                   |
-| **Storage**        | Built-in local-path    | Perlu external provider |
-| **Load Balancer**  | Built-in servicelb     | Perlu external LB       |
-| **Image Registry** | Local containerd       | Perlu registry setup    |
-| **Use Case**       | Dev, Edge, IoT         | Production, Enterprise  |
-
-### Troubleshooting K3s
-
-#### 1. K3s Service Issues
-
-```bash
-# Cek status K3s
-sudo systemctl status k3s
-
-# Restart K3s
-sudo systemctl restart k3s
-
-# Cek logs K3s
-sudo journalctl -u k3s -f
-```
-
-#### 2. Image Import Issues
-
-```bash
-# Manual import images
-docker save belimang-postgres:latest | sudo k3s ctr images import -
-docker save belimang-app:latest | sudo k3s ctr images import -
-
-# List images di K3s
-sudo k3s ctr images list | grep belimang
-```
-
-#### 3. Storage Issues
-
-```bash
-# Cek storage class
-kubectl get storageclass
-
-# Cek PVC status
-kubectl get pvc -n belimang
-
-# Cek local-path provisioner
-kubectl get pods -n local-path-storage
-```
-
-#### 4. Network Access Issues
-
-```bash
-# Cek node IP
-kubectl get nodes -o wide
-
-# Cek service endpoints
-kubectl get endpoints -n belimang
-
-# Test internal connectivity
-kubectl run test-pod --image=busybox -it --rm -- nslookup belimang-app-service.belimang.svc.cluster.local
-```
-
-### K3s Production Considerations
-
-#### Security Hardening
-
-```bash
-# Install dengan security options
-curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--protect-kernel-defaults --secrets-encryption" sh -
-
-# Setup firewall rules
-sudo ufw allow 6443/tcp  # K3s API server
-sudo ufw allow 10250/tcp # Kubelet
-```
-
-#### High Availability K3s
-
-```bash
-# Setup K3s cluster dengan external database
-curl -sfL https://get.k3s.io | K3S_DATASTORE_ENDPOINT="mysql://user:pass@tcp(host:3306)/k3s" sh -s - server
-
-# Join additional nodes
-curl -sfL https://get.k3s.io | K3S_URL=https://master-ip:6443 K3S_TOKEN=node-token sh -
-```
-
-#### Backup dan Recovery
-
-```bash
-# Backup K3s data
-sudo cp -r /var/lib/rancher/k3s/server/db /backup/k3s-$(date +%Y%m%d)
-
-# Backup aplikasi data
-kubectl get pvc -n belimang -o yaml > belimang-pvc-backup.yaml
-```
-
-### Monitoring Kubernetes Deployment
-
-```bash
-# Cek status pods
-kubectl get pods -n belimang
-
-# Cek status services
-kubectl get services -n belimang
+# Cek resource usage
+kubectl top pods -n machinist-belimang-airmata
 
 # Cek logs aplikasi
-kubectl logs -f deployment/belimang-app-deployment -n belimang
-
-# Cek logs PostgreSQL
-kubectl logs -f deployment/postgres-deployment -n belimang
-
-# Cek logs Redis
-kubectl logs -f deployment/redis-deployment -n belimang
-
-# Describe pod untuk troubleshooting
-kubectl describe pod <pod-name> -n belimang
+kubectl logs -f deployment/belimang -n machinist-belimang-airmata
 ```
 
-### Akses Aplikasi Kubernetes
+### Health Checks
 
 ```bash
+# Test aplikasi health
+kubectl get pods -n machinist-belimang-airmata
+
 # Port forward untuk akses lokal
-kubectl port-forward service/belimang-app-service 8080:80 -n belimang
-
-# Atau dapatkan external IP (jika LoadBalancer tersedia)
-kubectl get service belimang-app-service -n belimang
+kubectl port-forward service/belimang 8080:80 -n machinist-belimang-airmata
 ```
 
-### Scaling Aplikasi
+### Scaling Operations
 
 ```bash
-# Scale aplikasi ke 3 replicas
-kubectl scale deployment belimang-app-deployment --replicas=3 -n belimang
+# Scale aplikasi
+kubectl scale deployment belimang --replicas=4 -n machinist-belimang-airmata
 
-# Cek status scaling
-kubectl get deployment belimang-app-deployment -n belimang
-```
-
-### Update Aplikasi
-
-```bash
-# Update image aplikasi
-kubectl set image deployment/belimang-app-deployment belimang-app=belimang-app:v2 -n belimang
+# Update aplikasi
+kubectl set image deployment/belimang belimang=arfiansr/belimang-app:v2 -n machinist-belimang-airmata
 
 # Rollback jika diperlukan
-kubectl rollout undo deployment/belimang-app-deployment -n belimang
+kubectl rollout undo deployment/belimang -n machinist-belimang-airmata
+```
 
-# Cek status rollout
-kubectl rollout status deployment/belimang-app-deployment -n belimang
+### Database Management
+
+```bash
+# Cek tabel database
+kubectl exec -n machinist-belimang-airmata belimang-postgresql-xxx -- psql -U postgres -d belimang -c "\dt"
+
+# Cek logs PostgreSQL
+kubectl logs -f deployment/belimang-postgresql -n machinist-belimang-airmata
+
+# Cek logs Redis
+kubectl logs -f deployment/belimang-redis -n machinist-belimang-airmata
 ```
 
 ## Troubleshooting

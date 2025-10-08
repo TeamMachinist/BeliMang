@@ -1,0 +1,20 @@
+apiVersion: v2
+name: belimang
+description: A Helm chart for Belimang geospatial e-commerce application
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - belimang
+  - ecommerce
+  - geospatial
+  - golang
+  - postgresql
+  - redis
+home: https://github.com/your-org/belimang
+sources:
+  - https://github.com/your-org/belimang
+maintainers:
+  - name: Belimang Team
+    email: team@belimang.com
+# No external dependencies - using custom PostgreSQL and Redis templates

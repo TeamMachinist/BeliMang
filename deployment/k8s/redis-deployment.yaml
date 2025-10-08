@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-deployment
+  namespace: belimang
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 6379
+          args:
+            - "redis-server"
+            - "--appendonly"
+            - "yes"
+            - "--appendfsync"
+            - "everysec"
+            - "--maxmemory"
+            - "4gb"
+            - "--maxmemory-policy"
+            - "allkeys-lru"
+            - "--save"
+            - "900 1"
+            - "--save"
+            - "300 10"
+            - "--save"
+            - "60 10000"
+            - "--tcp-keepalive"
+            - "300"
+            - "--timeout"
+            - "0"
+            - "--tcp-backlog"
+            - "511"
+            - "--databases"
+            - "16"
+          livenessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - redis-cli
+                - ping
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: "2"
+              memory: "6Gi"
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+          volumeMounts:
+            - name: redis-storage
+              mountPath: /data
+      volumes:
+        - name: redis-storage
+          persistentVolumeClaim:
+            claimName: redis-pvc

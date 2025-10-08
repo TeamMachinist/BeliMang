@@ -10,17 +10,19 @@ services:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      # Performance tuning
       POSTGRES_INITDB_ARGS: "--data-checksums"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d:ro
       - ./seeds:/seeds:ro
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "5433:5432"
     restart: unless-stopped
     networks:
       - belimang-network
+    security_opt:
+      - seccomp:unconfined
+
     command:
       - "postgres"
       - "-c"
@@ -47,12 +49,16 @@ services:
       - "min_wal_size=1GB"
       - "-c"
       - "max_wal_size=4GB"
+      - "-c"
+      - "io_method=io_uring"
+
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
+
     deploy:
       resources:
         limits:
@@ -63,11 +69,11 @@ services:
           memory: 512M
 
   redis:
-    image: redis:7-alpine
+    image: redis:latest
     container_name: belimang-redis
     env_file: .env
     ports:
-      - "${CACHE_PORT:-6379}:6379"
+      - "6380:6379"
     volumes:
       - redis_data:/data
     restart: unless-stopped
@@ -124,7 +130,6 @@ services:
       REDIS_ADDR: ${REDIS_ADDR}
       GOMAXPROCS: ${GOMAXPROCS:-4}
       GOMEMLIMIT: ${GOMEMLIMIT:-1536MiB}
-      # Enable io_uring for better I/O performance
       GODEBUG: "asyncpreemptoff=1"
       GOCACHE: /tmp/go-cache
       GOTMPDIR: /tmp/go-tmp
@@ -156,7 +161,6 @@ services:
         delay: 5s
         max_attempts: 3
         window: 120s
-    # Security options
     security_opt:
       - no-new-privileges:true
     cap_drop:

@@ -1,0 +1,158 @@
+{{- if .Values.postgresql.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "belimang.fullname" . }}-postgresql
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "belimang.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "belimang.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgresql
+  template:
+    metadata:
+      labels:
+        {{- include "belimang.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: postgresql
+    spec:
+      initContainers:
+        - name: init-postgresql
+          image: "{{ .Values.postgresql.image.registry }}/{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              # Create required directories and set permissions
+              mkdir -p /data/pgdata
+              chown -R postgres:postgres /data
+              echo "PostgreSQL data directory initialized"
+          volumeMounts:
+            - name: postgresql-data
+              mountPath: /data
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+      containers:
+        - name: postgresql
+          image: "{{ .Values.postgresql.image.registry }}/{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
+          ports:
+            - name: postgresql
+              containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.postgresql.auth.username }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "belimang.fullname" . }}-secret
+                  key: DB_PASSWORD
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresql.auth.database }}
+            - name: PGDATA
+              value: /data/pgdata
+          {{- if .Values.postgresql.primary.configuration }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              # Write custom configuration
+              cat > /tmp/custom.conf << 'EOF'
+              {{ .Values.postgresql.primary.configuration | nindent 14 }}
+              EOF
+              
+              # Append custom config to postgresql.conf
+              echo "include '/tmp/custom.conf'" >> /usr/share/postgresql/postgresql.conf.sample
+              
+              # Start PostgreSQL
+              exec docker-entrypoint.sh postgres
+          {{- end }}
+          resources:
+            {{- toYaml .Values.postgresql.primary.resources | nindent 12 }}
+          volumeMounts:
+            - name: postgresql-data
+              mountPath: /data
+            - name: initdb-scripts
+              mountPath: /docker-entrypoint-initdb.d
+            {{- if .Values.postgresql.primary.configuration }}
+            - name: postgresql-config
+              mountPath: /tmp/custom.conf
+              subPath: custom.conf
+            {{- end }}
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - exec pg_isready -U {{ .Values.postgresql.auth.username }} -h 127.0.0.1 -p 5432
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 6
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - exec pg_isready -U {{ .Values.postgresql.auth.username }} -h 127.0.0.1 -p 5432
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 6
+      volumes:
+        - name: postgresql-data
+          emptyDir: {}
+        - name: initdb-scripts
+          configMap:
+            name: {{ include "belimang.fullname" . }}-initdb
+        {{- if .Values.postgresql.primary.configuration }}
+        - name: postgresql-config
+          configMap:
+            name: {{ include "belimang.fullname" . }}-postgresql-config
+        {{- end }}
+---
+{{- if .Values.postgresql.primary.configuration }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "belimang.fullname" . }}-postgresql-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "belimang.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+data:
+  custom.conf: |
+    {{ .Values.postgresql.primary.configuration | nindent 4 }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "belimang.fullname" . }}-postgresql
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "belimang.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: postgresql
+      protocol: TCP
+      name: postgresql
+  selector:
+    {{- include "belimang.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgresql
+{{- end }}

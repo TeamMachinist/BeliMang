@@ -6,7 +6,12 @@ metadata:
   labels:
     app: belimang-app
 spec:
-  replicas: 2
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: belimang-app
@@ -15,6 +20,7 @@ spec:
       labels:
         app: belimang-app
     spec:
+      restartPolicy: Always
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -44,8 +50,8 @@ spec:
                   key: HTTP_PORT
             - name: DATABASE_URL
               valueFrom:
-                configMapKeyRef:
-                  name: belimang-config
+                secretKeyRef:
+                  name: belimang-secret
                   key: DATABASE_URL
             - name: REDIS_ADDR
               valueFrom:
@@ -54,8 +60,8 @@ spec:
                   key: REDIS_ADDR
             - name: JWT_SECRET_KEY
               valueFrom:
-                configMapKeyRef:
-                  name: belimang-config
+                secretKeyRef:
+                  name: belimang-secret
                   key: JWT_SECRET_KEY
             - name: JWT_ISSUER
               valueFrom:
@@ -98,30 +104,28 @@ spec:
                   name: belimang-config
                   key: GOTMPDIR
           livenessProbe:
-            exec:
-              command:
-                - /app/server
-                - health
+            httpGet:
+              path: /healthz
+              port: 8080
             initialDelaySeconds: 40
             periodSeconds: 30
             timeoutSeconds: 3
             failureThreshold: 3
           readinessProbe:
-            exec:
-              command:
-                - /app/server
-                - health
+            httpGet:
+              path: /healthz
+              port: 8080
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
           resources:
             limits:
-              cpu: "4"
-              memory: "2Gi"
+              cpu: "2"
+              memory: "1Gi"
             requests:
               cpu: "2"
-              memory: "512Mi"
+              memory: "256Mi"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false

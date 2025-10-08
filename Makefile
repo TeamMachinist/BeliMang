@@ -70,36 +70,85 @@ docker-login:
 # Build and push with login
 deploy-images: docker-login push-images
 
+# Build only application image for Helm deployment
+build-app-image:
+	@echo "Building application image for Helm deployment..."
+	docker build -t $(APP_IMAGE) --target production .
+	@echo "Application image built successfully!"
+
+# Push only application image for Helm deployment
+push-app-image: build-app-image
+	@echo "Pushing application image..."
+	docker push $(APP_IMAGE)
+	@echo "Application image pushed successfully!"
+
+# Build and push app image with login (for Helm)
+deploy-app-image: docker-login push-app-image
+
 # Kubernetes deployment
 k8s-deploy:
 	@echo "Updating Kubernetes manifests with registry images..."
-	@sed -i.bak 's|belimang-postgres:latest|$(POSTGRES_IMAGE)|g' k8s/postgres-deployment.yaml
-	@sed -i.bak 's|belimang-app:latest|$(APP_IMAGE)|g' k8s/app-deployment.yaml
-	@sed -i.bak 's|imagePullPolicy: Never|imagePullPolicy: Always|g' k8s/postgres-deployment.yaml k8s/app-deployment.yaml
+	@sed -i.bak 's|belimang-postgres:latest|$(POSTGRES_IMAGE)|g' deployment/k8s/postgres-deployment.yaml
+	@sed -i.bak 's|belimang-app:latest|$(APP_IMAGE)|g' deployment/k8s/app-deployment.yaml
+	@sed -i.bak 's|imagePullPolicy: Never|imagePullPolicy: Always|g' deployment/k8s/postgres-deployment.yaml deployment/k8s/app-deployment.yaml
 	@echo "Deploying to Kubernetes..."
-	cd k8s && ./deploy.sh deploy
+	cd deployment/k8s && ./deploy.sh deploy
 	@echo "Restoring original manifests..."
-	@mv k8s/postgres-deployment.yaml.bak k8s/postgres-deployment.yaml
-	@mv k8s/app-deployment.yaml.bak k8s/app-deployment.yaml
+	@mv deployment/k8s/postgres-deployment.yaml.bak deployment/k8s/postgres-deployment.yaml
+	@mv deployment/k8s/app-deployment.yaml.bak deployment/k8s/app-deployment.yaml
 
 # Kubernetes cleanup
 k8s-cleanup:
-	cd k8s && ./deploy.sh cleanup
+	cd deployment/k8s && ./deploy.sh cleanup
 
 # K3s deployment (lightweight Kubernetes)
 k3s-deploy:
 	@echo "Deploying to K3s..."
-	cd k8s && ./deploy-k3s.sh deploy
+	cd deployment/k3s && ./deploy.sh deploy
 
 # K3s cleanup
 k3s-cleanup:
-	cd k8s && ./deploy-k3s.sh cleanup
+	cd deployment/k3s && ./deploy.sh cleanup
 
 # Database seeding
 POSTGRES_USER ?= postgres
 POSTGRES_DB ?= belimang
 seed-dev:
 	docker compose -f compose.dev.yaml exec -T postgres psql -U $(POSTGRES_USER) -d $(POSTGRES_DB) < ./seeds/01_seeds_data.sql
+
+# Helm deployment commands
+HELM_NAMESPACE ?= machinist-belimang-airmata
+HELM_RELEASE_NAME ?= belimang
+KUBECONFIG ?= deployment/machinist.kubeconfig
+
+# Helm production deployment
+helm-install:
+	@echo "Installing Belimang production environment with Helm..."
+	KUBECONFIG=$(KUBECONFIG) helm install $(HELM_RELEASE_NAME) deployment/helm \
+		--namespace $(HELM_NAMESPACE) \
+		--create-namespace \
+		--wait --timeout=15m
+
+# Helm production upgrade
+helm-upgrade:
+	@echo "Upgrading Belimang production environment with Helm..."
+	KUBECONFIG=$(KUBECONFIG) helm upgrade $(HELM_RELEASE_NAME) deployment/helm \
+		--namespace $(HELM_NAMESPACE) \
+		--wait --timeout=15m
+
+# Helm uninstall
+helm-uninstall:
+	@echo "Uninstalling Belimang Helm release..."
+	KUBECONFIG=$(KUBECONFIG) helm uninstall $(HELM_RELEASE_NAME) --namespace $(HELM_NAMESPACE)
+
+# Helm status
+helm-status:
+	KUBECONFIG=$(KUBECONFIG) helm status $(HELM_RELEASE_NAME) --namespace $(HELM_NAMESPACE)
+
+# Helm template (dry-run)
+helm-template:
+	KUBECONFIG=$(KUBECONFIG) helm template $(HELM_RELEASE_NAME) deployment/helm \
+		--namespace $(HELM_NAMESPACE)
 
 # Help command
 help:
@@ -129,6 +178,13 @@ help:
 	@echo "    k3s-deploy      - Deploy to K3s using local images"
 	@echo "    k3s-cleanup     - Clean up K3s deployment"
 	@echo ""
+	@echo "  Helm (Production):"
+	@echo "    helm-install          - Install production environment with Helm"
+	@echo "    helm-upgrade          - Upgrade production environment with Helm"
+	@echo "    helm-uninstall        - Uninstall Helm release"
+	@echo "    helm-status           - Show Helm release status"
+	@echo "    helm-template         - Generate templates (dry-run)"
+	@echo ""
 	@echo "  Database:"
 	@echo "    seed-dev        - Seed development database"
 	@echo ""
@@ -136,3 +192,5 @@ help:
 	@echo "    REGISTRY=docker.io (default)"
 	@echo "    REGISTRY_USER=your-username (required for registry operations)"
 	@echo "    IMAGE_TAG=latest (default)"
+	@echo "    HELM_NAMESPACE=belimang (default)"
+	@echo "    HELM_RELEASE_NAME=belimang (default)"
