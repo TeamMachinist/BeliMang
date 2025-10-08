@@ -7,6 +7,11 @@ metadata:
     app: belimang-app
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
   selector:
     matchLabels:
       app: belimang-app
@@ -15,6 +20,7 @@ spec:
       labels:
         app: belimang-app
     spec:
+      restartPolicy: Always
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000

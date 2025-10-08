@@ -267,6 +267,10 @@ deploy_k3s() {
     print_status "Waiting for Application to be ready..."
     kubectl wait --for=condition=available --timeout=300s deployment/belimang-app-deployment -n belimang
     
+    # Deploy HPA (Horizontal Pod Autoscaler)
+    print_status "Deploying HPA for auto scaling..."
+    kubectl apply -f app-hpa.yaml
+    
     print_success "K3s deployment completed successfully!"
 }
 

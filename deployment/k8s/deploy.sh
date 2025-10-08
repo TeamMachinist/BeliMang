@@ -140,6 +140,10 @@ deploy() {
     log_info "Waiting for Application to be ready..."
     kubectl wait --for=condition=available --timeout=300s deployment/belimang-app-deployment -n "$NAMESPACE"
     
+    # Deploy HPA (Horizontal Pod Autoscaler)
+    log_info "Deploying HPA for auto scaling..."
+    kubectl apply -f "$SCRIPT_DIR/app-hpa.yaml"
+    
     log_success "Belimang application deployed successfully!"
     
     # Show deployment status
