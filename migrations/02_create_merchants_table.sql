@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS merchants (
 -- h3_lat_lng_to_cell(Point('37.7749, -122.4194'), 9)
 
 -- Create spatial index
--- CREATE INDEX IF NOT EXISTS idx_merchants_location_gist ON merchants USING GIST (location);
+CREATE INDEX IF NOT EXISTS idx_merchants_location_gist ON merchants USING GIST (location);
 
 -- Create trigram-based text search index for name search (supports ILIKE '%...%')
 CREATE INDEX IF NOT EXISTS idx_merchants_name_trgm ON merchants USING GIN(name gin_trgm_ops);

@@ -2,9 +2,10 @@ package database
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
 	"time"
+
+	"belimang/internal/observability/metrics"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -15,31 +16,37 @@ type DB struct {
 }
 
 func NewDatabase(ctx context.Context, cfg string) (*DB, error) {
-	// Create connection string using config
-	// connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
-	// 	cfg.Host, cfg.Port, cfg.Username, cfg.Password, cfg.Database, cfg.SSLMode)
-
 	config, err := pgxpool.ParseConfig(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse database URL: %w", err)
 	}
 
-	// Performance tuning for high RPS (60k target)
-	// With 3-5 app pods, each pod needs ~40-50 connections for optimal performance
-	config.MaxConns = 50                       // Increased for 60k RPS (was 30)
-	config.MinConns = 15                       // More warm connections (was 5)
-	config.MaxConnLifetime = 30 * time.Minute  // Shorter recycle for high load (was 1h)
-	config.MaxConnIdleTime = 2 * time.Minute   // Faster cleanup of idle (was 5m)
-	config.HealthCheckPeriod = 30 * time.Second // More frequent health checks (was 1m)
+	// Connection pool settings
+	config.MaxConns = 80
+	config.MinConns = 30
+	config.MaxConnLifetime = 30 * time.Minute
+	config.MaxConnIdleTime = 3 * time.Minute
+	config.HealthCheckPeriod = 1 * time.Minute
+	config.ConnConfig.ConnectTimeout = 3 * time.Second
 
-	// Connection timeout - more lenient for high load
-	config.ConnConfig.ConnectTimeout = 3 * time.Second // Increased from 1s
+	config.ConnConfig.RuntimeParams = map[string]string{
+		"statement_timeout":                   "3000",
+		"idle_in_transaction_session_timeout": "5000",
+		"application_name":                    "belimang-app",
+	}
+
+	// Enable query tracer for automatic metrics
+	config.ConnConfig.Tracer = &MetricsTracer{}
 
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
+		return nil, fmt.Errorf("failed to create connection pool: %w", err)
 	}
 
-	if err := pool.Ping(ctx); err != nil {
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	if err := pool.Ping(pingCtx); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
@@ -49,29 +56,43 @@ func NewDatabase(ctx context.Context, cfg string) (*DB, error) {
 		Pool:    pool,
 	}
 
+	// Start metrics collection
+	go db.collectMetrics(ctx)
+
 	return db, nil
 }
 
+func (db *DB) collectMetrics(ctx context.Context) {
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			stats := db.Pool.Stat()
+			metrics.DBConnectionsActive.Set(float64(stats.AcquiredConns()))
+			metrics.DBConnectionsIdle.Set(float64(stats.IdleConns()))
+			metrics.DBConnectionsTotal.Set(float64(stats.TotalConns()))
+			metrics.DBMaxOpenConnections.Set(float64(stats.MaxConns()))
+		}
+	}
+}
+
 func (db *DB) Close() {
-	db.Pool.Close()
+	if db.Pool != nil {
+		db.Pool.Close()
+	}
 }
 
 func (db *DB) HealthCheck(ctx context.Context) error {
-	// Basic ping
-	if err := db.Pool.Ping(ctx); err != nil {
+	checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	if err := db.Pool.Ping(checkCtx); err != nil {
 		return fmt.Errorf("ping failed: %w", err)
 	}
 
-	// Test query
-	var result int
-	err := db.Pool.QueryRow(ctx, "SELECT 1").Scan(&result)
-	if err != nil {
-		return fmt.Errorf("query test failed: %w", err)
-	}
-
 	return nil
-}
-
-func (db *DB) GetStats() *pgxpool.Stat {
-	return db.Pool.Stat()
 }

@@ -5,6 +5,7 @@ import (
 	logger "belimang/internal/pkg/logging"
 	"belimang/internal/pkg/utils"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -293,7 +294,17 @@ type GetMerchantsNearbyParams struct {
 	Offset           int
 }
 
+type rawItem struct {
+	ID              uuid.UUID `json:"id"`
+	Name            string    `json:"name"`
+	ProductCategory string    `json:"product_category"`
+	Price           int64     `json:"price"`
+	ImageUrl        string    `json:"image_url"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
 func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, params *GetMerchantsNearbyParams) (*GetMerchantsNearbyResponse, error) {
+	// Set default limit if not provided
 	if params.Limit <= 0 {
 		params.Limit = 5
 	}
@@ -303,76 +314,91 @@ func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, params *GetMer
 	if params.MerchantID != "" {
 		parsedUUID, err := uuid.Parse(params.MerchantID)
 		if err != nil {
-			return &GetMerchantsNearbyResponse{}, errors.New("invalid merchant_id")
+			return nil, errors.New("invalid merchant_id")
 		}
 		merchantID = parsedUUID
 	} // else merchantID remains zero value (00000000-0000-0000-0000-000000000000)
 
+	// Fetch merchants with items (JSON aggregated)
 	rows, err := s.queries.GetNearestMerchant(ctx, database.GetNearestMerchantParams{
-		UserLat:          params.Lat,
-		UserLng:          params.Lng,
-		MerchantID:       merchantID,              // Zero UUID if not provided
-		SearchName:       params.Name,             // Empty string if not provided
-		MerchantCategory: params.MerchantCategory, // Empty string if not provided
+		UserLat:          params.Lat, // user latitude
+		UserLng:          params.Lng, // user longitude
+		MerchantID:       merchantID,
+		MerchantCategory: params.MerchantCategory,
+		SearchName:       params.Name, // search name
 		LimitRows:        int32(params.Limit),
 		OffsetRows:       int32(params.Offset),
 	})
 	if err != nil {
-		return &GetMerchantsNearbyResponse{}, fmt.Errorf("failed to fetch merchants with items: %w", err)
+		return nil, fmt.Errorf("failed to fetch merchants with items: %w", err)
 	}
 
+	// Count total merchants for pagination
 	totalMerchants, err := s.queries.CountNearestMerchants(ctx, database.CountNearestMerchantsParams{
 		MerchantID:       merchantID,
 		SearchName:       params.Name,
 		MerchantCategory: params.MerchantCategory,
 	})
 	if err != nil {
-		return &GetMerchantsNearbyResponse{}, fmt.Errorf("failed to count merchants: %w", err)
+		return nil, fmt.Errorf("failed to count merchants: %w", err)
 	}
 
-	// Group by merchant while preserving order
-	merchantMap := make(map[string]*MerchantWithItemsResponse)
-	merchantOrder := []string{}
+	// Transform database rows to response
+	data := make([]MerchantWithItemsResponse, 0, len(rows))
 
 	for _, row := range rows {
-		merchantID := row.MerchantID.String()
-
-		if _, exists := merchantMap[merchantID]; !exists {
-			merchantMap[merchantID] = &MerchantWithItemsResponse{
-				Merchant: MerchantInfo{
-					MerchantID:       merchantID,
-					Name:             row.MerchantName,
-					MerchantCategory: row.MerchantCategory,
-					ImageUrl:         row.MerchantImageUrl,
-					Location: Location{
-						Lat:  row.Lat,
-						Long: row.Lng,
-					},
-					CreatedAt: row.MerchantCreatedAt.Format(time.RFC3339Nano),
+		merchant := MerchantWithItemsResponse{
+			Merchant: MerchantInfo{
+				MerchantID:       row.MerchantID.String(),
+				Name:             row.MerchantName,
+				MerchantCategory: row.MerchantCategory,
+				ImageUrl:         row.MerchantImageUrl,
+				Location: Location{
+					Lat:  row.Lat,
+					Long: row.Lng,
 				},
-				Items: []ItemInfo{},
+				CreatedAt: row.MerchantCreatedAt.Format(time.RFC3339Nano),
+			},
+			Items: []ItemInfo{}, // Initialize empty items array
+		}
+
+		// Parse items JSON array
+		if row.Items != nil {
+			var rawItems []rawItem
+
+			// Convert interface{} to []byte for json.Unmarshal
+			var itemsJSON []byte
+			switch v := row.Items.(type) {
+			case []byte:
+				itemsJSON = v
+			case string:
+				itemsJSON = []byte(v)
+			default:
+				// If pgx already parsed it, marshal back to JSON then unmarshal to our struct
+				jsonBytes, err := json.Marshal(v)
+				if err != nil {
+					return nil, fmt.Errorf("failed to marshal items for merchant %s: %w", row.MerchantID, err)
+				}
+				itemsJSON = jsonBytes
 			}
-			merchantOrder = append(merchantOrder, merchantID)
+
+			if err := json.Unmarshal(itemsJSON, &rawItems); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal items for merchant %s: %w", row.MerchantID, err)
+			}
+
+			for _, rawItem := range rawItems {
+				merchant.Items = append(merchant.Items, ItemInfo{
+					ItemID:          rawItem.ID.String(),
+					Name:            rawItem.Name,
+					ProductCategory: rawItem.ProductCategory,
+					Price:           rawItem.Price,
+					ImageUrl:        rawItem.ImageUrl,
+					CreatedAt:       rawItem.CreatedAt.Format(time.RFC3339Nano),
+				})
+			}
 		}
 
-		// Only add item if it exists (not the default UUID we set in COALESCE)
-		defaultUUID := uuid.MustParse("00000000-0000-0000-0000-000000000000")
-		if row.ItemID != uuid.Nil && row.ItemID != defaultUUID {
-			merchantMap[merchantID].Items = append(merchantMap[merchantID].Items, ItemInfo{
-				ItemID:          row.ItemID.String(),
-				Name:            row.ItemName,
-				ProductCategory: row.ProductCategory,
-				Price:           row.Price,
-				ImageUrl:        row.ItemImageUrl,
-				CreatedAt:       row.ItemCreatedAt.Format(time.RFC3339Nano),
-			})
-		}
-	}
-
-	// Build final data array maintaining order
-	data := make([]MerchantWithItemsResponse, 0, len(merchantOrder))
-	for _, merchantID := range merchantOrder {
-		data = append(data, *merchantMap[merchantID])
+		data = append(data, merchant)
 	}
 
 	return &GetMerchantsNearbyResponse{
@@ -390,7 +416,6 @@ func (s *PurchaseService) GetOrdersService(ctx context.Context, userID uuid.UUID
 	if userID == uuid.Nil {
 		return nil, ErrInvalidUserID
 	}
-
 	var merchantID uuid.UUID
 	if filter.MerchantID != "" {
 		id, err := uuid.Parse(filter.MerchantID)

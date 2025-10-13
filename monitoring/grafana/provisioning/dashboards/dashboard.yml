@@ -1,0 +1,16 @@
+# monitoring/grafana/provisioning/dashboards/dashboard.yml
+# Auto-load dashboards from folder
+
+apiVersion: 1
+
+providers:
+  - name: "Belimang Dashboards"
+    orgId: 1
+    folder: "Belimang"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true

@@ -16,11 +16,11 @@ spec:
       maxSurge: 1
   selector:
     matchLabels:
-      {{- include "belimang.selectorLabels" . | nindent 6 }}
+      {{- include "belimang.appSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "belimang.selectorLabels" . | nindent 8 }}
+        {{- include "belimang.appSelectorLabels" . | nindent 8 }}
     spec:
       restartPolicy: Always
       securityContext:
