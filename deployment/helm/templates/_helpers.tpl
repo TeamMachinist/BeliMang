@@ -49,6 +49,15 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+App-specific selector labels (for main application pods only)
+*/}}
+{{- define "belimang.appSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "belimang.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: app
+{{- end }}
+
+{{/*
 Create the name of the service account to use
 */}}
 {{- define "belimang.serviceAccountName" -}}
@@ -74,9 +83,9 @@ postgres://{{ .Values.postgresql.auth.username }}:{{ .Values.postgresql.auth.pas
 Redis Address
 */}}
 {{- define "belimang.redisAddr" -}}
-{{- if .Values.redis.enabled }}
-{{ include "belimang.fullname" . }}-redis-master:6379
-{{- else }}
+{{- if .Values.redis.enabled -}}
+{{ include "belimang.fullname" . }}-redis:6379
+{{- else -}}
 {{ .Values.configMap.redis.addr }}
-{{- end }}
+{{- end -}}
 {{- end }}

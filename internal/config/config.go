@@ -20,6 +20,7 @@ type Config struct {
 type ServerConfig struct {
 	Host string `json:"host"`
 	Port int    `json:"port"`
+	Env  string
 }
 
 // DatabaseConfig holds database configuration
@@ -90,6 +91,7 @@ func LoadConfig(envPath string) (*Config, error) {
 		Server: ServerConfig{
 			Host: getEnv("SERVER_HOST", "localhost"),
 			Port: serverPort,
+			Env:  getEnv("ENV", "development"),
 		},
 		Database: DatabaseConfig{
 			Host:     getEnv("DB_HOST", "localhost"),

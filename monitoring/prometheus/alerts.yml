@@ -1,0 +1,79 @@
+# monitoring/prometheus/alerts.yml
+# Alert rules for Belimang — compatible with Prometheus templating
+
+groups:
+  # Application alerts
+  - name: belimang_app_alerts
+    interval: 30s
+    rules:
+      - alert: HighRequestLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(belimang_http_request_duration_seconds_bucket{endpoint!="",endpoint!~"not_found"}[5m]))
+            by (le, endpoint, method)
+          ) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High P95 latency on {{ $labels.endpoint }} ({{ $labels.method }})"
+          description: 'P95 request latency is {{ $value | printf "%.3f" }}s for endpoint {{ $labels.endpoint }} (method: {{ $labels.method }}). Exceeds 500ms threshold.'
+
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(belimang_http_requests_total{status="5xx"}[5m]))
+            /
+            sum(rate(belimang_http_requests_total{status=~"2..|3..|4..|5.."}[5m]))
+          ) * 100 > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP 5xx error rate"
+          description: 'HTTP 5xx error rate is {{ $value | printf "%.2f" }}% over the last 5 minutes.'
+
+      - alert: ApplicationDown
+        expr: up{job="belimang-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Belimang application is down"
+          description: "The belimang-app service (target: app:8080) is unreachable."
+
+  # Database alerts
+  - name: belimang_database_alerts
+    interval: 30s
+    rules:
+      - alert: DatabaseConnectionPoolHigh
+        expr: |
+          (belimang_database_connections_active / belimang_database_max_open_connections) * 100 > 90
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool near capacity"
+          description: 'Database connection pool usage is {{ $value | printf "%.1f" }}%.'
+
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL exporter is down"
+          description: "The postgres-exporter is unreachable."
+
+  # Redis alerts
+  - name: belimang_redis_alerts
+    interval: 30s
+    rules:
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis exporter is down"
+          description: "The redis-exporter is unreachable."

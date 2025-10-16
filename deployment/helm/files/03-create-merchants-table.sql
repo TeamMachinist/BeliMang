@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS merchants (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 -- Create indexes
+CREATE INDEX IF NOT EXISTS idx_merchants_location_gist ON merchants USING GIST (location);
 CREATE INDEX IF NOT EXISTS idx_merchants_name_trgm ON merchants USING GIN(name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_merchants_category ON merchants(merchant_category);
 CREATE INDEX IF NOT EXISTS idx_merchants_created_at_desc ON merchants(created_at DESC NULLS LAST);

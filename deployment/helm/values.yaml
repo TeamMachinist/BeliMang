@@ -1,7 +1,7 @@
-# Default values for belimang
-# This is a YAML-formatted file.
+# Values.yaml - OPTIMIZED untuk 60K RPS
+# Database pool: 80 conns/pod × 4 pods = 320 total
+# 7 cores, 21GB RAM
 
-# Global configuration
 global:
   imageRegistry: ""
   imagePullSecrets: []
@@ -16,31 +16,54 @@ app:
     tag: "latest"
     pullPolicy: Always
 
-  replicaCount: 3
+  replicaCount: 4 # Fixed 4 pods untuk 60K RPS (15K RPS per pod target)
 
-  # Environment configuration
+  # Environment configuration - OPTIMIZED
   env:
     ENV: production
     GIN_MODE: release
     HTTP_PORT: 8080
-    LOG_LEVEL: info
+    LOG_LEVEL: error # Minimal logging untuk max performance
     LOG_TYPE: json
-    GOMAXPROCS: 2
-    GOMEMLIMIT: 1536MiB
-    GODEBUG: asyncpreemptoff=1
+    GOMAXPROCS: "" # Auto-detect dari CPU limit
+    GOMEMLIMIT: 2304MiB # ~90% dari 2.5GB limit
+    GODEBUG: asyncpreemptoff=1,gctrace=0,madvdontneed=0
     GOCACHE: /tmp/go-cache
     GOTMPDIR: /tmp/go-tmp
 
-  # Resource configuration (optimized for 60k RPS on 7 core, 21GB RAM)
+  # Resource configuration - BALANCED
   resources:
     limits:
-      cpu: 1500m
-      memory: 4Gi
+      cpu: 1000m # 1 core per pod
+      memory: 2560Mi # 2.5GB per pod
     requests:
-      cpu: 1
-      memory: 2Gi
+      cpu: 900m # High request untuk guaranteed QoS
+      memory: 2048Mi # 2GB request
 
-  # Security context
+  # Network tuning - CRITICAL untuk 60K RPS
+  podSecurityContext:
+    sysctls:
+      - name: net.core.somaxconn
+        value: "65535"
+      - name: net.ipv4.tcp_max_syn_backlog
+        value: "16384"
+      - name: net.ipv4.ip_local_port_range
+        value: "1024 65535"
+      - name: net.ipv4.tcp_tw_reuse
+        value: "1"
+      - name: net.ipv4.tcp_fin_timeout
+        value: "15" # Faster cleanup
+      - name: net.core.netdev_max_backlog
+        value: "32768"
+      - name: net.ipv4.tcp_keepalive_time
+        value: "600"
+      - name: net.ipv4.tcp_keepalive_intvl
+        value: "30"
+      - name: net.ipv4.tcp_keepalive_probes
+        value: "3"
+      - name: net.ipv4.tcp_slow_start_after_idle
+        value: "0"
+
   securityContext:
     runAsNonRoot: true
     runAsUser: 1000
@@ -54,15 +77,16 @@ app:
       add:
         - NET_BIND_SERVICE
 
-  # Health checks
+  # Health checks - RELAXED untuk high load
   livenessProbe:
     httpGet:
       path: /healthz
       port: 8080
-    initialDelaySeconds: 40
-    periodSeconds: 30
+    initialDelaySeconds: 30
+    periodSeconds: 30 # Less frequent checks
     timeoutSeconds: 3
-    failureThreshold: 3
+    failureThreshold: 5 # More tolerant during load
+    successThreshold: 1
 
   readinessProbe:
     httpGet:
@@ -72,6 +96,30 @@ app:
     periodSeconds: 10
     timeoutSeconds: 3
     failureThreshold: 3
+    successThreshold: 1
+
+  # Pod topology spread
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app: belimang-app
+
+  # Anti-affinity untuk distribute load
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                    - belimang-app
+            topologyKey: kubernetes.io/hostname
 
 # Service configuration
 service:
@@ -79,6 +127,7 @@ service:
   port: 80
   targetPort: 8080
   annotations: {}
+  sessionAffinity: None
 
 # Ingress configuration
 ingress:
@@ -92,34 +141,35 @@ ingress:
           pathType: Prefix
   tls: []
 
-# Horizontal Pod Autoscaler
+# HPA - DISABLED untuk load test (stability)
 autoscaling:
-  enabled: true
-  minReplicas: 3
-  maxReplicas: 4
-  targetCPUUtilizationPercentage: 60
-  targetMemoryUtilizationPercentage: 70
+  enabled: false
+  minReplicas: 4
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 75
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: 60
+      stabilizationWindowSeconds: 30
       policies:
-        - type: Percent
-          value: 100
-          periodSeconds: 15
         - type: Pods
-          value: 2
-          periodSeconds: 60
+          value: 1
+          periodSeconds: 30
+      selectPolicy: Max
     scaleDown:
       stabilizationWindowSeconds: 300
       policies:
-        - type: Percent
-          value: 50
-          periodSeconds: 60
         - type: Pods
           value: 1
-          periodSeconds: 60
+          periodSeconds: 120
+      selectPolicy: Min
 
-# PostgreSQL configuration (using Bitnami chart)
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 3 # Keep at least 3 pods during disruptions
+
+# PostgreSQL - TUNED untuk 320 connections (4 pods × 80)
 postgresql:
   enabled: true
   auth:
@@ -127,9 +177,7 @@ postgresql:
     username: "postgres"
     password: "change-this-secure-password-production"
     database: "belimang"
-    # Enable automatic database creation
     enablePostgresUser: true
-    # Create database automatically
     createDatabase: true
 
   image:
@@ -140,48 +188,105 @@ postgresql:
   primary:
     resources:
       limits:
-        cpu: 2500m
-        memory: 8Gi
+        cpu: 2000m # 2 cores
+        memory: 6Gi
       requests:
-        cpu: 1500m
-        memory: 4Gi
+        cpu: 1800m
+        memory: 5Gi
 
     persistence:
       enabled: true
       size: 50Gi
       storageClass: ""
 
-    # PostgreSQL configuration with io_uring
     configuration: |
-      # Performance tuning for production (7 Core, 21GB RAM - shared with app + redis)
-      # PostgreSQL gets ~10GB RAM allocation
-      shared_buffers = 2GB
-      max_connections = 200
-      effective_cache_size = 6GB
-      maintenance_work_mem = 512MB
+      # Connection settings - CRITICAL
+      # 4 pods × 80 max_conns = 320 + 80 buffer = 400 total
+      max_connections = 400
+      superuser_reserved_connections = 10
+
+      # Memory settings (optimized untuk 6GB)
+      shared_buffers = 1536MB
+      effective_cache_size = 4GB
+      maintenance_work_mem = 384MB
+      work_mem = 6MB  # Small work_mem karena banyak connections
+
+      # WAL settings
+      wal_buffers = 48MB
+      min_wal_size = 512MB
+      max_wal_size = 2GB
       checkpoint_completion_target = 0.9
-      wal_buffers = 64MB
-      default_statistics_target = 100
+      wal_compression = on
+      wal_writer_delay = 200ms
+
+      # Query planner
       random_page_cost = 1.1
-      effective_io_concurrency = 200
-      work_mem = 8MB
-      min_wal_size = 1GB
-      max_wal_size = 4GB
-      max_worker_processes = 7
-      max_parallel_workers_per_gather = 3
-      max_parallel_workers = 7
-      max_parallel_maintenance_workers = 3
-      # io_uring optimization for PostgreSQL 18
+      effective_io_concurrency = 300
+      default_statistics_target = 100
+
+      # Parallel query - REDUCED karena banyak connections
+      max_worker_processes = 4
+      max_parallel_workers_per_gather = 2
+      max_parallel_workers = 4
+      max_parallel_maintenance_workers = 2
+
+      # Background writer
+      bgwriter_delay = 200ms
+      bgwriter_lru_maxpages = 100
+      bgwriter_lru_multiplier = 2.0
+
+      # Logging - MINIMAL untuk performance
+      log_min_duration_statement = 5000  # Log hanya query > 5s
+      log_line_prefix = '%t [%p]: '
+      log_checkpoints = on
+      log_connections = off
+      log_disconnections = off
+      log_lock_waits = on
+      log_statement = 'none'
+      log_temp_files = 10240  # Log temp files > 10MB
+
+      # Autovacuum - AGGRESSIVE untuk high write
+      autovacuum = on
+      autovacuum_max_workers = 3
+      autovacuum_naptime = 5s
+      autovacuum_vacuum_scale_factor = 0.1
+      autovacuum_analyze_scale_factor = 0.05
+      autovacuum_vacuum_cost_delay = 10ms
+      autovacuum_vacuum_cost_limit = 1000
+
+      # io_uring optimization (PostgreSQL 18)
       io_method = io_uring
 
-    # Use ConfigMap for initialization scripts
+      # Lock management
+      deadlock_timeout = 1s
+      max_locks_per_transaction = 128
+
+      # Connection handling
+      tcp_keepalives_idle = 600
+      tcp_keepalives_interval = 30
+      tcp_keepalives_count = 3
+
+      # Statement timeout enforcement
+      statement_timeout = 10000  # 10s max (backup dari app config)
+      idle_in_transaction_session_timeout = 15000  # 15s max
+
     initdbScriptsConfigMap: '{{ include "belimang.fullname" . }}-initdb'
 
-# Redis configuration (using Bitnami chart)
+    podSecurityContext:
+      fsGroup: 1001
+      sysctls:
+        - name: kernel.shmmax
+          value: "6442450944" # 6GB
+        - name: kernel.shmall
+          value: "1572864"
+        - name: net.core.somaxconn
+          value: "4096"
+
+# Redis - OPTIMIZED untuk high throughput
 redis:
   enabled: true
   auth:
-    enabled: false
+    enabled: false # Disable auth untuk reduce latency
 
   image:
     registry: docker.io
@@ -192,104 +297,87 @@ redis:
   master:
     resources:
       limits:
-        cpu: 1
-        memory: 4Gi
+        cpu: 1000m # 1 core
+        memory: 3Gi
       requests:
-        cpu: 500m
-        memory: 2Gi
+        cpu: 900m
+        memory: 2560Mi
 
     persistence:
       enabled: true
       size: 20Gi
       storageClass: ""
 
-    # Redis configuration
     configuration: |
       # Memory management
-      maxmemory 5gb
+      maxmemory 2560mb
       maxmemory-policy allkeys-lru
+      maxmemory-samples 3  # Faster eviction
 
-      # Persistence
-      save 900 1
-      save 300 10
-      save 60 10000
+      # Persistence - DISABLED untuk max performance saat load test
+      save ""
+      appendonly no
 
-      # Performance
-      tcp-keepalive 300
+      # Performance tuning
+      tcp-keepalive 60
       timeout 0
+      tcp-backlog 2048
+
+      # Optimization
+      lazyfree-lazy-eviction yes
+      lazyfree-lazy-expire yes
+      lazyfree-lazy-server-del yes
+      replica-lazy-flush yes
+
+      # I/O threads (Redis 7+)
+      io-threads 4
+      io-threads-do-reads yes
+
+      # Disable slow operations logging during test
+      slowlog-log-slower-than 20000
+      slowlog-max-len 64
+
+      # Client output buffer
+      client-output-buffer-limit normal 0 0 0
+      client-output-buffer-limit replica 256mb 64mb 60
+      client-output-buffer-limit pubsub 32mb 8mb 60
+
+      # Network
+      proto-max-bulk-len 512mb
+
+      # Disable RDB & AOF completely (pure cache mode)
+      stop-writes-on-bgsave-error no
+
+    podSecurityContext:
+      sysctls:
+        - name: net.core.somaxconn
+          value: "65535"
 
 # Secrets configuration
 secrets:
-  # Database secrets
   database:
+    # Database URL - parameters akan di-ignore oleh hardcoded config
+    # Tapi tetap kita set untuk dokumentasi
     url: "postgres://postgres:change-this-secure-password-production@belimang-postgresql:5432/belimang?sslmode=disable"
     password: "change-this-secure-password-production"
 
-  # JWT secrets
   jwt:
     secretKey: "change-this-jwt-secret-key-in-production-use-long-random-string-minimum-32-chars"
     issuer: "belimang-app"
 
-# ConfigMap configuration
+# ConfigMap - Redis pool configuration
 configMap:
-  # Redis connection
   redis:
-    addr: "belimang-redis-master:6379"
+    addr: "belimang-redis:6379"
+    maxRetries: 2
+    poolSize: 150 # 4 pods × 150 = 600 connections (Redis bisa handle)
+    minIdleConns: 50
+    poolTimeout: 3s
+    idleTimeout: 5m
+    idleCheckFrequency: 1m
 
-  # Cache configuration
   cache:
-    host: "belimang-redis-master"
+    host: "belimang-redis"
     port: 6379
     password: ""
     db: 0
-
-# Development overrides
-dev:
-  app:
-    replicaCount: 1
-    image:
-      pullPolicy: Never
-    resources:
-      limits:
-        cpu: 1
-        memory: 1Gi
-      requests:
-        cpu: 1
-        memory: 256Mi
-    env:
-      ENV: development
-      GIN_MODE: debug
-      LOG_LEVEL: debug
-      LOG_TYPE: simple
-      GOMAXPROCS: 4
-      GOMEMLIMIT: 1536MiB
-
-  postgresql:
-    primary:
-      resources:
-        limits:
-          cpu: 1
-          memory: 1Gi
-        requests:
-          cpu: 500m
-          memory: 256Mi
-      persistence:
-        size: 2Gi
-
-  redis:
-    master:
-      resources:
-        limits:
-          cpu: 500m
-          memory: 512Mi
-        requests:
-          cpu: 250m
-          memory: 128Mi
-      persistence:
-        size: 1Gi
-
-  autoscaling:
-    enabled: true
-    minReplicas: 1
-    maxReplicas: 3
-    targetCPUUtilizationPercentage: 80

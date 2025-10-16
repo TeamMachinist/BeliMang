@@ -1,0 +1,74 @@
+# monitoring/prometheus/prometheus.yml
+# Prometheus configuration for Belimang
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+  external_labels:
+    cluster: "belimang-local"
+    environment: "development"
+
+# Load alert rules
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+        labels:
+          service: "prometheus"
+
+  # Belimang Application - INI YANG AMBIL METRICS DARI APP ANDA
+  - job_name: "belimang-app"
+    scrape_interval: 5s
+    static_configs:
+      - targets: ["app:8080"]
+        labels:
+          service: "belimang-app"
+          component: "backend"
+    metrics_path: "/metrics"
+
+  # PostgreSQL Database metrics
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+        labels:
+          service: "postgresql"
+          component: "database"
+
+  # Redis Cache metrics
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+        labels:
+          service: "redis"
+          component: "cache"
+
+  # Node Exporter - System metrics (CPU, RAM, Disk)
+  - job_name: "node"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels:
+          service: "node-exporter"
+          component: "host"
+
+  # cAdvisor - Container metrics
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+        labels:
+          service: "cadvisor"
+          component: "containers"
+
+  # Grafana self-monitoring
+  - job_name: "grafana"
+    static_configs:
+      - targets: ["grafana:3000"]
+        labels:
+          service: "grafana"
+          component: "monitoring"
+    metrics_path: "/metrics"

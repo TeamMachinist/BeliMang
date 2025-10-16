@@ -142,7 +142,7 @@ services:
     networks:
       - belimang-network
     healthcheck:
-      test: ["CMD", "/app/server", "health"]
+      test: ["CMD", "/app/server", "healthz"]
       interval: 30s
       timeout: 3s
       retries: 3

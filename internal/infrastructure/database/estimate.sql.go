@@ -284,61 +284,91 @@ func (q *Queries) GetMerchantsLatLong(ctx context.Context, merchantID []uuid.UUI
 }
 
 const getNearestMerchant = `-- name: GetNearestMerchant :many
+
 WITH user_location AS (
-    SELECT ST_SetSRID(ST_Point($1, $2), 4326)::GEOGRAPHY AS point
+    SELECT 
+        ST_SetSRID(ST_Point($1::float, $2::float), 4326)::GEOGRAPHY AS point,
+        $1::float - 0.5 AS min_lng,
+        $2::float - 0.5 AS min_lat,
+        $1::float + 0.5 AS max_lng,
+        $2::float + 0.5 AS max_lat
 ),
 filtered_merchants AS (
-    SELECT DISTINCT m.id, ST_Distance(m.location, ul.point) AS distance_meters
+    SELECT 
+        m.id, 
+        m.name,
+        m.merchant_category,
+        m.image_url,
+        m.lat,
+        m.lng,
+        m.created_at,
+        ST_Distance(m.location, ul.point) AS distance_meters
     FROM merchants m
     CROSS JOIN user_location ul
-    LEFT JOIN items i ON m.id = i.merchant_id
     WHERE
-        ($3::uuid = '00000000-0000-0000-0000-000000000000'::uuid OR m.id = $3)
-        AND (
-            $4::text = ''
-            OR m.name ILIKE '%' || $4 || '%'
-            OR EXISTS (
-                SELECT 1 FROM items i2 
-                WHERE i2.merchant_id = m.id 
-                AND i2.name ILIKE '%' || $4 || '%'
-            )
-        )
+        m.location && ST_MakeEnvelope(ul.min_lng, ul.min_lat, ul.max_lng, ul.max_lat, 4326)
+        AND ($3::uuid = '00000000-0000-0000-0000-000000000000'::uuid 
+             OR m.id = $3::uuid)
+        AND ($4::text = '' 
+             OR m.merchant_category = $4::text)
         AND (
             $5::text = ''
-            OR m.merchant_category = $5
+            OR m.name ILIKE '%' || $5::text || '%'
+            OR EXISTS (
+                SELECT 1 
+                FROM items i 
+                WHERE i.merchant_id = m.id 
+                  AND i.name ILIKE '%' || $5::text || '%'
+                LIMIT 1
+            )
         )
-    ORDER BY distance_meters ASC, m.id ASC
+    ORDER BY distance_meters ASC
     LIMIT $7 OFFSET $6
 )
 SELECT
-    m.id AS merchant_id,
-    m.name AS merchant_name,
-    m.merchant_category,
-    m.image_url AS merchant_image_url,
-    m.lat,
-    m.lng,
-    m.created_at AS merchant_created_at,
-    COALESCE(i.id, '00000000-0000-0000-0000-000000000000'::uuid) AS item_id,
-    COALESCE(i.name, '') AS item_name,
-    COALESCE(i.product_category, '') AS product_category,
-    COALESCE(i.price, 0) AS price,
-    COALESCE(i.image_url, '') AS item_image_url,
-    COALESCE(i.created_at, '1970-01-01 00:00:00'::timestamp) AS item_created_at,
-    fm.distance_meters
+    fm.id AS merchant_id,
+    fm.name AS merchant_name,
+    fm.merchant_category,
+    fm.image_url AS merchant_image_url,
+    fm.lat,
+    fm.lng,
+    fm.created_at AS merchant_created_at,
+    fm.distance_meters,
+    COALESCE(
+        json_agg(
+            json_build_object(
+                'id', i.id,
+                'name', i.name,
+                'product_category', i.product_category,
+                'price', i.price,
+                'image_url', i.image_url,
+                'created_at', i.created_at
+            ) ORDER BY i.created_at ASC, i.id ASC
+        ) FILTER (WHERE i.id IS NOT NULL),
+        '[]'::json
+    ) AS items
 FROM filtered_merchants fm
-JOIN merchants m ON fm.id = m.id
-LEFT JOIN items i ON m.id = i.merchant_id
-ORDER BY fm.distance_meters ASC, m.id ASC, i.created_at ASC NULLS LAST, i.id ASC
+LEFT JOIN items i ON fm.id = i.merchant_id
+GROUP BY 
+    fm.id, 
+    fm.name, 
+    fm.merchant_category, 
+    fm.image_url, 
+    fm.lat, 
+    fm.lng, 
+    fm.created_at, 
+    fm.distance_meters
+ORDER BY fm.distance_meters ASC
 `
 
 type GetNearestMerchantParams struct {
-	UserLng          interface{} `json:"user_lng"`
-	UserLat          interface{} `json:"user_lat"`
-	MerchantID       uuid.UUID   `json:"merchant_id"`
-	SearchName       string      `json:"search_name"`
-	MerchantCategory string      `json:"merchant_category"`
-	OffsetRows       int32       `json:"offset_rows"`
-	LimitRows        int32       `json:"limit_rows"`
+	UserLng          float64   `json:"user_lng"`
+	UserLat          float64   `json:"user_lat"`
+	MerchantID       uuid.UUID `json:"merchant_id"`
+	MerchantCategory string    `json:"merchant_category"`
+	SearchName       string    `json:"search_name"`
+	OffsetRows       int32     `json:"offset_rows"`
+	LimitRows        int32     `json:"limit_rows"`
 }
 
 type GetNearestMerchantRow struct {
@@ -349,13 +379,8 @@ type GetNearestMerchantRow struct {
 	Lat               float64     `json:"lat"`
 	Lng               float64     `json:"lng"`
 	MerchantCreatedAt time.Time   `json:"merchant_created_at"`
-	ItemID            uuid.UUID   `json:"item_id"`
-	ItemName          string      `json:"item_name"`
-	ProductCategory   string      `json:"product_category"`
-	Price             int64       `json:"price"`
-	ItemImageUrl      string      `json:"item_image_url"`
-	ItemCreatedAt     time.Time   `json:"item_created_at"`
 	DistanceMeters    interface{} `json:"distance_meters"`
+	Items             interface{} `json:"items"`
 }
 
 func (q *Queries) GetNearestMerchant(ctx context.Context, arg GetNearestMerchantParams) ([]GetNearestMerchantRow, error) {
@@ -363,8 +388,8 @@ func (q *Queries) GetNearestMerchant(ctx context.Context, arg GetNearestMerchant
 		arg.UserLng,
 		arg.UserLat,
 		arg.MerchantID,
-		arg.SearchName,
 		arg.MerchantCategory,
+		arg.SearchName,
 		arg.OffsetRows,
 		arg.LimitRows,
 	)
@@ -383,13 +408,8 @@ func (q *Queries) GetNearestMerchant(ctx context.Context, arg GetNearestMerchant
 			&i.Lat,
 			&i.Lng,
 			&i.MerchantCreatedAt,
-			&i.ItemID,
-			&i.ItemName,
-			&i.ProductCategory,
-			&i.Price,
-			&i.ItemImageUrl,
-			&i.ItemCreatedAt,
 			&i.DistanceMeters,
+			&i.Items,
 		); err != nil {
 			return nil, err
 		}
