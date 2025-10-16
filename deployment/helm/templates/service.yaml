@@ -17,4 +17,4 @@ spec:
       protocol: TCP
       name: http
   selector:
-    {{- include "belimang.selectorLabels" . | nindent 4 }}
+    {{- include "belimang.appSelectorLabels" . | nindent 4 }}

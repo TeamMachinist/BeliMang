@@ -22,7 +22,7 @@ services:
     command: ["postgres"]
 
   redis:
-    image: redis:7-alpine
+    image: redis:latest
     container_name: belimang-redis
     env_file: .env
     ports:
