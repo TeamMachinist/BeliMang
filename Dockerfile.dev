@@ -22,4 +22,6 @@ RUN go mod download
 
 COPY . .
 
+RUN mkdir -p /tmp/go-cache /tmp/go-tmp /app/tmp
+
 CMD ["air"]

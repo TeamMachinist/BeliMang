@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const countNearestMerchants = `-- name: CountNearestMerchants :one
@@ -284,114 +285,74 @@ func (q *Queries) GetMerchantsLatLong(ctx context.Context, merchantID []uuid.UUI
 }
 
 const getNearestMerchant = `-- name: GetNearestMerchant :many
-
-WITH user_location AS (
-    SELECT 
-        ST_SetSRID(ST_Point($1::float, $2::float), 4326)::GEOGRAPHY AS point,
-        $1::float - 0.5 AS min_lng,
-        $2::float - 0.5 AS min_lat,
-        $1::float + 0.5 AS max_lng,
-        $2::float + 0.5 AS max_lat
-),
-filtered_merchants AS (
-    SELECT 
-        m.id, 
-        m.name,
-        m.merchant_category,
-        m.image_url,
-        m.lat,
-        m.lng,
-        m.created_at,
-        ST_Distance(m.location, ul.point) AS distance_meters
-    FROM merchants m
-    CROSS JOIN user_location ul
-    WHERE
-        m.location && ST_MakeEnvelope(ul.min_lng, ul.min_lat, ul.max_lng, ul.max_lat, 4326)
-        AND ($3::uuid = '00000000-0000-0000-0000-000000000000'::uuid 
+SELECT 
+  m.id, 
+  m.name, 
+  m.merchant_category, 
+  m.image_url, 
+  ST_Y(m.location::geometry) AS lat, 
+  ST_X(m.location::geometry) AS lon, 
+  m.created_at, 
+  mi.id AS item_id, 
+  COALESCE(mi.name, '') AS item_name, 
+  COALESCE(mi.product_category, '') AS product_category, 
+  COALESCE(mi.price, 0) AS price, 
+  COALESCE(mi.image_url, '') AS item_image_url, 
+  mi.created_at AS item_created_at, 
+  ST_Distance(
+    m.location, 
+    ST_SetSRID(ST_MakePoint($1, $2), 4326)
+  ) AS distance 
+FROM 
+  merchants m
+  LEFT JOIN items mi ON mi.merchant_id = m.id 
+  WHERE (mi.id <> '00000000-0000-0000-0000-000000000000') OR 
+  ($3::uuid = '00000000-0000-0000-0000-000000000000'::uuid 
              OR m.id = $3::uuid)
-        AND ($4::text = '' 
-             OR m.merchant_category = $4::text)
-        AND (
-            $5::text = ''
-            OR m.name ILIKE '%' || $5::text || '%'
-            OR EXISTS (
-                SELECT 1 
-                FROM items i 
-                WHERE i.merchant_id = m.id 
-                  AND i.name ILIKE '%' || $5::text || '%'
-                LIMIT 1
-            )
-        )
-    ORDER BY distance_meters ASC
-    LIMIT $7 OFFSET $6
-)
-SELECT
-    fm.id AS merchant_id,
-    fm.name AS merchant_name,
-    fm.merchant_category,
-    fm.image_url AS merchant_image_url,
-    fm.lat,
-    fm.lng,
-    fm.created_at AS merchant_created_at,
-    fm.distance_meters,
-    COALESCE(
-        json_agg(
-            json_build_object(
-                'id', i.id,
-                'name', i.name,
-                'product_category', i.product_category,
-                'price', i.price,
-                'image_url', i.image_url,
-                'created_at', i.created_at
-            ) ORDER BY i.created_at ASC, i.id ASC
-        ) FILTER (WHERE i.id IS NOT NULL),
-        '[]'::json
-    ) AS items
-FROM filtered_merchants fm
-LEFT JOIN items i ON fm.id = i.merchant_id
-GROUP BY 
-    fm.id, 
-    fm.name, 
-    fm.merchant_category, 
-    fm.image_url, 
-    fm.lat, 
-    fm.lng, 
-    fm.created_at, 
-    fm.distance_meters
-ORDER BY fm.distance_meters ASC
+AND m.name ILIKE CONCAT('%', $4::text, '%')
+AND (($5::text = '')
+  OR m.merchant_category = $5::text)
+ORDER BY 
+  distance ASC
+LIMIT ($7::int) OFFSET ($6::int)
 `
 
 type GetNearestMerchantParams struct {
-	UserLng          float64   `json:"user_lng"`
-	UserLat          float64   `json:"user_lat"`
-	MerchantID       uuid.UUID `json:"merchant_id"`
-	MerchantCategory string    `json:"merchant_category"`
-	SearchName       string    `json:"search_name"`
-	OffsetRows       int32     `json:"offset_rows"`
-	LimitRows        int32     `json:"limit_rows"`
+	Lon              interface{} `json:"lon"`
+	Lat              interface{} `json:"lat"`
+	MerchantID       uuid.UUID   `json:"merchant_id"`
+	Name             string      `json:"name"`
+	MerchantCategory string      `json:"merchant_category"`
+	Offs             int         `json:"offs"`
+	Lmt              int         `json:"lmt"`
 }
 
 type GetNearestMerchantRow struct {
-	MerchantID        uuid.UUID   `json:"merchant_id"`
-	MerchantName      string      `json:"merchant_name"`
-	MerchantCategory  string      `json:"merchant_category"`
-	MerchantImageUrl  string      `json:"merchant_image_url"`
-	Lat               float64     `json:"lat"`
-	Lng               float64     `json:"lng"`
-	MerchantCreatedAt time.Time   `json:"merchant_created_at"`
-	DistanceMeters    interface{} `json:"distance_meters"`
-	Items             interface{} `json:"items"`
+	ID               uuid.UUID          `json:"id"`
+	Name             string             `json:"name"`
+	MerchantCategory string             `json:"merchant_category"`
+	ImageUrl         string             `json:"image_url"`
+	Lat              interface{}        `json:"lat"`
+	Lon              interface{}        `json:"lon"`
+	CreatedAt        time.Time          `json:"created_at"`
+	ItemID           uuid.UUID          `json:"item_id"`
+	ItemName         string             `json:"item_name"`
+	ProductCategory  string             `json:"product_category"`
+	Price            int64              `json:"price"`
+	ItemImageUrl     string             `json:"item_image_url"`
+	ItemCreatedAt    pgtype.Timestamptz `json:"item_created_at"`
+	Distance         interface{}        `json:"distance"`
 }
 
 func (q *Queries) GetNearestMerchant(ctx context.Context, arg GetNearestMerchantParams) ([]GetNearestMerchantRow, error) {
 	rows, err := q.db.Query(ctx, getNearestMerchant,
-		arg.UserLng,
-		arg.UserLat,
+		arg.Lon,
+		arg.Lat,
 		arg.MerchantID,
+		arg.Name,
 		arg.MerchantCategory,
-		arg.SearchName,
-		arg.OffsetRows,
-		arg.LimitRows,
+		arg.Offs,
+		arg.Lmt,
 	)
 	if err != nil {
 		return nil, err
@@ -401,15 +362,20 @@ func (q *Queries) GetNearestMerchant(ctx context.Context, arg GetNearestMerchant
 	for rows.Next() {
 		var i GetNearestMerchantRow
 		if err := rows.Scan(
-			&i.MerchantID,
-			&i.MerchantName,
+			&i.ID,
+			&i.Name,
 			&i.MerchantCategory,
-			&i.MerchantImageUrl,
+			&i.ImageUrl,
 			&i.Lat,
-			&i.Lng,
-			&i.MerchantCreatedAt,
-			&i.DistanceMeters,
-			&i.Items,
+			&i.Lon,
+			&i.CreatedAt,
+			&i.ItemID,
+			&i.ItemName,
+			&i.ProductCategory,
+			&i.Price,
+			&i.ItemImageUrl,
+			&i.ItemCreatedAt,
+			&i.Distance,
 		); err != nil {
 			return nil, err
 		}

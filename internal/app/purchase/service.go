@@ -5,7 +5,6 @@ import (
 	logger "belimang/internal/pkg/logging"
 	"belimang/internal/pkg/utils"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -59,7 +58,7 @@ func (s *PurchaseService) ValidateAndEstimate(ctx context.Context, userID uuid.U
 	if len(req.Orders) == 0 {
 		return EstimateResponse{}, errors.New("orders cannot be empty")
 	}
-
+	// Sorting merchants 
 	var merchantIDs []uuid.UUID
 	merchantIdMap := make(map[string]uuid.UUID)
 	for _, o := range req.Orders {
@@ -319,19 +318,19 @@ func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, params *GetMer
 		merchantID = parsedUUID
 	} // else merchantID remains zero value (00000000-0000-0000-0000-000000000000)
 
-	// Fetch merchants with items (JSON aggregated)
 	rows, err := s.queries.GetNearestMerchant(ctx, database.GetNearestMerchantParams{
-		UserLat:          params.Lat, // user latitude
-		UserLng:          params.Lng, // user longitude
-		MerchantID:       merchantID,
-		MerchantCategory: params.MerchantCategory,
-		SearchName:       params.Name, // search name
-		LimitRows:        int32(params.Limit),
-		OffsetRows:       int32(params.Offset),
+		Lat:          params.Lat, // user latitude
+		Lon:          params.Lng, // user longitude
+		MerchantID:      merchantID,
+		MerchantCategory:  params.MerchantCategory,
+		Name:       params.Name, // search name
+		Lmt:        params.Limit,
+		Offs:       params.Offset,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch merchants with items: %w", err)
 	}
+	fmt.Println(len(rows))
 
 	// Count total merchants for pagination
 	totalMerchants, err := s.queries.CountNearestMerchants(ctx, database.CountNearestMerchantsParams{
@@ -349,53 +348,26 @@ func (s *PurchaseService) GetMerchantsNearby(ctx context.Context, params *GetMer
 	for _, row := range rows {
 		merchant := MerchantWithItemsResponse{
 			Merchant: MerchantInfo{
-				MerchantID:       row.MerchantID.String(),
-				Name:             row.MerchantName,
+				MerchantID:       row.ID.String(),
+				Name:             row.Name,
 				MerchantCategory: row.MerchantCategory,
-				ImageUrl:         row.MerchantImageUrl,
+				ImageUrl:         row.ImageUrl,
 				Location: Location{
 					Lat:  row.Lat,
-					Long: row.Lng,
+					Long: row.Lon,
 				},
-				CreatedAt: row.MerchantCreatedAt.Format(time.RFC3339Nano),
+				CreatedAt: row.CreatedAt.Format(time.RFC3339Nano),
 			},
-			Items: []ItemInfo{}, // Initialize empty items array
-		}
-
-		// Parse items JSON array
-		if row.Items != nil {
-			var rawItems []rawItem
-
-			// Convert interface{} to []byte for json.Unmarshal
-			var itemsJSON []byte
-			switch v := row.Items.(type) {
-			case []byte:
-				itemsJSON = v
-			case string:
-				itemsJSON = []byte(v)
-			default:
-				// If pgx already parsed it, marshal back to JSON then unmarshal to our struct
-				jsonBytes, err := json.Marshal(v)
-				if err != nil {
-					return nil, fmt.Errorf("failed to marshal items for merchant %s: %w", row.MerchantID, err)
-				}
-				itemsJSON = jsonBytes
-			}
-
-			if err := json.Unmarshal(itemsJSON, &rawItems); err != nil {
-				return nil, fmt.Errorf("failed to unmarshal items for merchant %s: %w", row.MerchantID, err)
-			}
-
-			for _, rawItem := range rawItems {
-				merchant.Items = append(merchant.Items, ItemInfo{
-					ItemID:          rawItem.ID.String(),
-					Name:            rawItem.Name,
-					ProductCategory: rawItem.ProductCategory,
-					Price:           rawItem.Price,
-					ImageUrl:        rawItem.ImageUrl,
-					CreatedAt:       rawItem.CreatedAt.Format(time.RFC3339Nano),
-				})
-			}
+			Items: []ItemInfo{
+				{
+				ItemID: row.ItemID.String(),
+				Name: row.ItemName,
+				ProductCategory: row.ProductCategory,
+				Price: row.Price,
+				ImageUrl: row.ItemImageUrl,
+				CreatedAt: row.ItemCreatedAt.Time.Format(time.RFC3339Nano),
+			},
+			}, 
 		}
 
 		data = append(data, merchant)

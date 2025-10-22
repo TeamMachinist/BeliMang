@@ -69,8 +69,8 @@ type ItemInfo struct {
 }
 
 type Location struct {
-	Lat  float64 `json:"lat"`
-	Long float64 `json:"long"`
+	Lat  interface{} `json:"lat"`
+	Long interface{} `json:"long"`
 }
 
 type OrderFilter struct {

@@ -55,84 +55,37 @@ FROM estimate_orders
 WHERE estimate_id = @estimate_id
 ORDER BY id;
 
-
 -- name: GetNearestMerchant :many
-
--- name: GetNearestMerchant :many
-WITH user_location AS (
-    SELECT 
-        ST_SetSRID(ST_Point(sqlc.arg('user_lng')::float, sqlc.arg('user_lat')::float), 4326)::GEOGRAPHY AS point,
-        sqlc.arg('user_lng')::float - 0.5 AS min_lng,
-        sqlc.arg('user_lat')::float - 0.5 AS min_lat,
-        sqlc.arg('user_lng')::float + 0.5 AS max_lng,
-        sqlc.arg('user_lat')::float + 0.5 AS max_lat
-),
-filtered_merchants AS (
-    SELECT 
-        m.id, 
-        m.name,
-        m.merchant_category,
-        m.image_url,
-        m.lat,
-        m.lng,
-        m.created_at,
-        ST_Distance(m.location, ul.point) AS distance_meters
-    FROM merchants m
-    CROSS JOIN user_location ul
-    WHERE
-        m.location && ST_MakeEnvelope(ul.min_lng, ul.min_lat, ul.max_lng, ul.max_lat, 4326)
-        AND (sqlc.arg('merchant_id')::uuid = '00000000-0000-0000-0000-000000000000'::uuid 
+SELECT 
+  m.id, 
+  m.name, 
+  m.merchant_category, 
+  m.image_url, 
+  ST_Y(m.location::geometry) AS lat, 
+  ST_X(m.location::geometry) AS lon, 
+  m.created_at, 
+  mi.id AS item_id, 
+  COALESCE(mi.name, '') AS item_name, 
+  COALESCE(mi.product_category, '') AS product_category, 
+  COALESCE(mi.price, 0) AS price, 
+  COALESCE(mi.image_url, '') AS item_image_url, 
+  mi.created_at AS item_created_at, 
+  ST_Distance(
+    m.location, 
+    ST_SetSRID(ST_MakePoint(sqlc.arg('lon'), sqlc.arg('lat')), 4326)
+  ) AS distance 
+FROM 
+  merchants m
+  LEFT JOIN items mi ON mi.merchant_id = m.id 
+  WHERE (mi.id <> '00000000-0000-0000-0000-000000000000') OR 
+  (sqlc.arg('merchant_id')::uuid = '00000000-0000-0000-0000-000000000000'::uuid 
              OR m.id = sqlc.arg('merchant_id')::uuid)
-        AND (sqlc.arg('merchant_category')::text = '' 
-             OR m.merchant_category = sqlc.arg('merchant_category')::text)
-        AND (
-            sqlc.arg('search_name')::text = ''
-            OR m.name ILIKE '%' || sqlc.arg('search_name')::text || '%'
-            OR EXISTS (
-                SELECT 1 
-                FROM items i 
-                WHERE i.merchant_id = m.id 
-                  AND i.name ILIKE '%' || sqlc.arg('search_name')::text || '%'
-                LIMIT 1
-            )
-        )
-    ORDER BY distance_meters ASC
-    LIMIT sqlc.arg('limit_rows') OFFSET sqlc.arg('offset_rows')
-)
-SELECT
-    fm.id AS merchant_id,
-    fm.name AS merchant_name,
-    fm.merchant_category,
-    fm.image_url AS merchant_image_url,
-    fm.lat,
-    fm.lng,
-    fm.created_at AS merchant_created_at,
-    fm.distance_meters,
-    COALESCE(
-        json_agg(
-            json_build_object(
-                'id', i.id,
-                'name', i.name,
-                'product_category', i.product_category,
-                'price', i.price,
-                'image_url', i.image_url,
-                'created_at', i.created_at
-            ) ORDER BY i.created_at ASC, i.id ASC
-        ) FILTER (WHERE i.id IS NOT NULL),
-        '[]'::json
-    ) AS items
-FROM filtered_merchants fm
-LEFT JOIN items i ON fm.id = i.merchant_id
-GROUP BY 
-    fm.id, 
-    fm.name, 
-    fm.merchant_category, 
-    fm.image_url, 
-    fm.lat, 
-    fm.lng, 
-    fm.created_at, 
-    fm.distance_meters
-ORDER BY fm.distance_meters ASC;
+AND m.name ILIKE CONCAT('%', sqlc.arg('name')::text, '%')
+AND ((sqlc.narg('merchant_category')::text = '')
+  OR m.merchant_category = sqlc.narg('merchant_category')::text)
+ORDER BY 
+  distance ASC
+LIMIT (sqlc.arg('lmt')::int) OFFSET (sqlc.arg('offs')::int);
 
 -- name: CountNearestMerchants :one
 SELECT COUNT(DISTINCT m.id)

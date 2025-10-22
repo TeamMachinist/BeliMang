@@ -137,17 +137,6 @@ func (h *PurchaseHandler) GetMerchantsNearbyHandler(c *gin.Context) {
 		return
 	}
 
-	// // Validate lat/lng ranges
-	// if lat < -90 || lat > 90 {
-	// 	c.JSON(http.StatusBadRequest, gin.H{"error": "latitude must be between -90 and 90"})
-	// 	return
-	// }
-
-	// if lng < -180 || lng > 180 {
-	// 	c.JSON(http.StatusBadRequest, gin.H{"error": "longitude must be between -180 and 180"})
-	// 	return
-	// }
-
 	// Parse query parameters
 	merchantID := c.DefaultQuery("merchantId", "")
 	name := c.DefaultQuery("name", "")

@@ -1,8 +1,8 @@
 package merchant
 
 import (
-	"belimang/internal/pkg/jwt"
 	"belimang/internal/middleware"
+	"belimang/internal/pkg/jwt"
 
 	"github.com/gin-gonic/gin"
 )
